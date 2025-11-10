@@ -1,0 +1,4 @@
+video_file,label,role,user_id,notes
+calib_60s.mp4,none,calibration,user01,neutral baseline
+task_low_1.mp4,low,train,user01,low cognitive load
+task_high_1.mp4,high,train,user01,high cognitive load
