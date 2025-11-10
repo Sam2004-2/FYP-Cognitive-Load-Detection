@@ -1,0 +1,145 @@
+# Cognitive Load Estimation - Pilot Study Configuration
+#
+# This configuration is optimized for small sample sizes (1-5 participants).
+# Uses stronger regularization to prevent overfitting and adjusted evaluation parameters.
+
+# Random seed for reproducibility
+seed: 42
+
+# Fallback FPS if video metadata is unavailable
+fps_fallback: 30.0
+
+# Windowing parameters
+windows:
+  length_s: 20.0  # Window length in seconds
+  step_s: 5.0     # Step size in seconds (overlap = length - step)
+
+# Quality control thresholds
+quality:
+  min_face_conf: 0.5        # Minimum face detection confidence
+  max_bad_frame_ratio: 0.2  # Maximum ratio of bad frames per window
+
+# Blink detection parameters
+blink:
+  ear_thresh: 0.21      # Eye Aspect Ratio threshold for blink detection
+  min_blink_ms: 120     # Minimum blink duration in milliseconds
+  max_blink_ms: 400     # Maximum blink duration in milliseconds
+
+# TEPR (Task-Evoked Pupillary Response) parameters
+tepr:
+  baseline_s: 10.0      # Baseline window duration in seconds
+  min_baseline_samples: 150  # Minimum samples needed for valid baseline
+
+# Feature flags - enable/disable specific feature groups
+features_enabled:
+  tepr: true           # Task-Evoked Pupillary Response features
+  blinks: true         # Blink rate and statistics
+  perclos: true        # Percentage of eye closure
+  brightness: true     # Ambient brightness control
+  fix_sac: false       # Fixations and saccades (requires calibration)
+  gaze_entropy: false  # Gaze entropy (requires calibration)
+
+# Model configuration - ADJUSTED FOR SMALL SAMPLE SIZE
+model:
+  type: "logreg"          # Logistic regression (simpler model for small data)
+  calibration: "platt"    # Platt scaling calibration
+  
+  # Logistic regression with STRONG REGULARIZATION
+  logreg_params:
+    max_iter: 1000
+    C: 0.1              # REDUCED from 1.0 - stronger L2 regularization
+    penalty: "l2"       # L2 regularization to prevent overfitting
+    solver: "lbfgs"     # Solver suitable for small datasets
+  
+  # Gradient boosted trees (alternative - not recommended for pilot)
+  gbt_params:
+    n_estimators: 50    # REDUCED from 100 - fewer trees
+    max_depth: 2        # REDUCED from 3 - shallower trees
+    learning_rate: 0.05 # REDUCED from 0.1 - slower learning
+    subsample: 0.8      # Use 80% of samples per tree
+    min_samples_leaf: 3 # Require at least 3 samples per leaf
+
+# Evaluation configuration - ADJUSTED FOR SMALL SAMPLE SIZE
+eval:
+  metric: ["auc", "f1", "accuracy"]  # Metrics to compute
+  split_by_role: true     # Use role column if available (recommended)
+  test_size: 0.3          # INCREASED from 0.2 - larger test proportion
+  stratify: true          # Stratify splits by label (maintain class balance)
+  cv_folds: 3             # Cross-validation folds (if not using role split)
+
+# Real-time processing
+realtime:
+  smoothing_alpha: 0.5    # INCREASED from 0.4 - more smoothing for stability
+  conf_threshold: 0.5     # REDUCED from 0.6 - more lenient threshold
+  display_fps: true       # Show FPS in real-time output
+
+# Paths (relative to project root)
+paths:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"
+  processed_dir: "data/processed"
+  models_dir: "models"
+  reports_dir: "reports"
+
+# Logging configuration
+logging:
+  level: "INFO"           # Logging level: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  save_logs: true         # Save logs to file
+  log_dir: "logs"
+
+# Pilot study specific settings
+pilot_study:
+  # Expected sample size
+  expected_participants: 3
+  
+  # Lower performance expectations for pilot
+  target_auc: 0.60        # Lower bar than production (0.70)
+  
+  # Feature selection (keep all for pilot to explore)
+  feature_selection: false
+  
+  # Focus on within-subject patterns
+  analyze_per_subject: true
+  
+  # Collect detailed diagnostics
+  detailed_logging: true
+  save_per_window_predictions: true
+  
+  # Quality thresholds (same as main config)
+  min_valid_frame_ratio: 0.80
+  min_quality_score: 0.85
+  
+  # Recommendations for data collection
+  recommended_recordings_per_condition: 1  # Minimum
+  recommended_recording_duration_s: 60     # Per recording
+
+# Notes for pilot study users:
+#
+# 1. REGULARIZATION: C=0.1 provides strong regularization to prevent 
+#    overfitting on small datasets. If training accuracy is very low (<0.60),
+#    try increasing C to 0.5.
+#
+# 2. TEST SIZE: 30% test split ensures sufficient test data even with few
+#    participants. With 3 participants × 2 conditions × ~10 windows = ~60 
+#    samples, this gives ~18 test samples.
+#
+# 3. MODEL CHOICE: Logistic regression is recommended for pilot studies.
+#    Gradient boosted trees are more prone to overfitting with small data.
+#
+# 4. EVALUATION: With 1-5 participants, expect:
+#    - High variance in metrics (results may vary significantly)
+#    - Limited generalization to new users
+#    - AUC 0.60-0.75 is reasonable for pilot
+#    - Focus on consistent patterns rather than absolute accuracy
+#
+# 5. NEXT STEPS: If pilot shows promising patterns (TEPR increases with load,
+#    consistent across participants), collect more data (10-15 participants)
+#    for production model.
+#
+# 6. TROUBLESHOOTING: If AUC < 0.55 (near random):
+#    - Check if high/low tasks actually differ in difficulty
+#    - Verify feature extraction quality (valid_frame_ratio > 0.80)
+#    - Review individual participant patterns in notebook
+#    - Consider collecting additional recordings per participant
+
