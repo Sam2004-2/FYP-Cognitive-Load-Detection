@@ -69,6 +69,7 @@ python3 -m pytest tests/ -v --cov=src --cov-report=term
 ```
 
 **Current Test Status**: ✅ 22 passed, 1 skipped (0.87s)
+**Python Version**: 3.10+ (required by pyproject.toml)
 
 ## 📊 Test Coverage
 
