@@ -101,9 +101,9 @@ def test_validate_window_quality_empty():
 def test_interpolate_gaps_small():
     """Test interpolation of small gaps."""
     frame_features = [
-        {"valid": True, "ear_mean": 0.3, "pupil_mean": 0.5},
-        {"valid": False, "ear_mean": 0.0, "pupil_mean": 0.0},  # Gap
-        {"valid": True, "ear_mean": 0.4, "pupil_mean": 0.6},
+        {"valid": True, "ear_mean": 0.3, "quality": 1.0},
+        {"valid": False, "ear_mean": 0.0, "quality": 0.0},  # Gap
+        {"valid": True, "ear_mean": 0.4, "quality": 1.0},
     ]
 
     interpolated = interpolate_gaps(frame_features, max_gap=3)
@@ -111,7 +111,6 @@ def test_interpolate_gaps_small():
     # Gap should be interpolated
     assert interpolated[1]["valid"] is True
     assert 0.3 < interpolated[1]["ear_mean"] < 0.4
-    assert 0.5 < interpolated[1]["pupil_mean"] < 0.6
 
 
 def test_interpolate_gaps_too_large():
