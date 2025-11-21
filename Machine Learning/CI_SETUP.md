@@ -71,7 +71,7 @@ The CI pipeline (`.github/workflows/ci.yml`) includes three jobs:
 
 ### 1. test-ml-pipeline
 - **Triggers**: Push or PR to main/master/develop
-- **Python Version**: 3.9 (compatible with 3.10+ codebase)
+- **Python Version**: 3.10 (matches pyproject.toml requirement)
 - **Steps**:
   1. Checkout code
   2. Set up Python with pip caching
