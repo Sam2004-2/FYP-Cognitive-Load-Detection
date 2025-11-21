@@ -6,6 +6,7 @@ to test the full pipeline without requiring real video data.
 """
 
 import argparse
+import random
 from pathlib import Path
 
 import cv2
@@ -114,16 +115,20 @@ def generate_video(
 
     # Generate blinks
     blink_frames = []
-    blink_interval_frames = int((60.0 / blink_rate) * fps) if blink_rate > 0 else n_frames * 2
-    for i in range(0, n_frames, blink_interval_frames):
-        # Add some randomness to blink timing
-        blink_frame = i + np.random.randint(-10, 10)
-        if 0 <= blink_frame < n_frames:
-            blink_frames.append(blink_frame)
-
+    if blink_rate > 0:
+        blink_interval_frames = int((60.0 / blink_rate) * fps)
+        # Add randomness to intervals
+        current_frame = np.random.randint(0, blink_interval_frames)
+        while current_frame < n_frames:
+            blink_frames.append(current_frame)
+            # Next blink with +/- 20% variability
+            variation = int(blink_interval_frames * 0.2)
+            next_interval = blink_interval_frames + np.random.randint(-variation, variation)
+            current_frame += next_interval
+    
     print(f"Generating {output_path.name}: {n_frames} frames @ {fps} fps")
     print(f"  Pupil: baseline={pupil_baseline:.2f}, variation={pupil_variation:.2f}")
-    print(f"  Blinks: {len(blink_frames)} blinks ({blink_rate:.1f}/min)")
+    print(f"  Blinks: {len(blink_frames)} blinks (~{blink_rate:.1f}/min)")
 
     # Generate frames
     for frame_idx in range(n_frames):
@@ -133,12 +138,15 @@ def generate_video(
         # Determine eye openness (blink state)
         eye_open_ratio = 1.0
         for blink_frame in blink_frames:
-            # Blink lasts ~4 frames (120ms at 30fps)
-            blink_distance = abs(frame_idx - blink_frame)
-            if blink_distance < 2:
-                eye_open_ratio = 0.1  # Eyes closed
-            elif blink_distance == 2:
-                eye_open_ratio = 0.5  # Half open
+            # Blink lasts ~4-6 frames (120-200ms at 30fps)
+            blink_duration = 4
+            dist = frame_idx - blink_frame
+            if 0 <= dist < blink_duration:
+                # Simple closing/opening animation
+                if dist < blink_duration / 2:
+                    eye_open_ratio = 0.1  # Closing
+                else:
+                    eye_open_ratio = 0.5  # Opening
 
         # Draw face
         face_center = (width // 2, height // 2)
@@ -151,14 +159,79 @@ def generate_video(
     print(f"  Saved to {output_path}")
 
 
+def generate_participant(
+    subject_id: str,
+    output_dir: Path,
+    fps: float = 30.0
+):
+    """Generate data for a single participant with randomized traits."""
+    subject_dir = output_dir / subject_id
+    subject_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Randomize physiological traits
+    # Base pupil size (0.3 - 0.6)
+    base_pupil = np.random.uniform(0.3, 0.6)
+    # Base blink rate (12 - 22 per min)
+    base_blink = np.random.uniform(12, 22)
+    
+    print(f"\nGenerating {subject_id}:")
+    print(f"  Traits: Base Pupil={base_pupil:.2f}, Base Blink={base_blink:.1f}/min")
+
+    # 1. Calibration (Baseline)
+    # Normal state
+    generate_video(
+        output_path=subject_dir / "calib_60s.mp4",
+        duration_s=60.0,
+        fps=fps,
+        pupil_baseline=base_pupil,
+        pupil_variation=0.05,
+        blink_rate=base_blink,
+    )
+
+    # 2. Low Load
+    # Slightly dilated pupil (+5%), slightly higher blink rate (+10%)
+    # (Low load often increases blink rate due to engagement without stress)
+    generate_video(
+        output_path=subject_dir / "task_low_1.mp4",
+        duration_s=60.0,
+        fps=fps,
+        pupil_baseline=base_pupil * 1.05, 
+        pupil_variation=0.08,
+        blink_rate=base_blink * 1.1,
+    )
+
+    # 3. High Load
+    # Dilated pupil (+15-25%), SUPPRESSED blink rate (-50%)
+    # (High load consistently suppresses blinks)
+    generate_video(
+        output_path=subject_dir / "task_high_1.mp4",
+        duration_s=60.0,
+        fps=fps,
+        pupil_baseline=base_pupil * 1.20, 
+        pupil_variation=0.03,  # Less variation (focused)
+        blink_rate=base_blink * 0.5,
+    )
+
+    # Generate manifest
+    manifest_data = {
+        "video_file": ["calib_60s.mp4", "task_low_1.mp4", "task_high_1.mp4"],
+        "label": ["none", "low", "high"],
+        "role": ["calibration", "train", "train"],
+        "user_id": [subject_id] * 3,
+        "notes": ["neutral baseline", "low cognitive load", "high cognitive load"],
+    }
+    
+    pd.DataFrame(manifest_data).to_csv(subject_dir / "meta.csv", index=False)
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Generate synthetic sample videos")
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="data/raw/user01",
-        help="Output directory for videos",
+        default="data/raw",
+        help="Root output directory",
     )
     parser.add_argument(
         "--fps",
@@ -166,64 +239,29 @@ def main():
         default=30.0,
         help="Frames per second",
     )
+    parser.add_argument(
+        "--num-subjects",
+        type=int,
+        default=1,
+        help="Number of subjects to generate",
+    )
 
     args = parser.parse_args()
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    root_dir = Path(args.output_dir)
 
     print("=" * 80)
-    print("Generating synthetic sample videos")
+    print(f"Generating synthetic data for {args.num_subjects} participants")
     print("=" * 80)
 
-    # Generate calibration video (neutral, no cognitive load)
-    generate_video(
-        output_path=output_dir / "calib_60s.mp4",
-        duration_s=60.0,
-        fps=args.fps,
-        pupil_baseline=0.5,
-        pupil_variation=0.05,  # Minimal variation
-        blink_rate=15.0,  # Normal blink rate
-    )
+    for i in range(args.num_subjects):
+        subject_id = f"synthetic_{i+1:03d}"
+        generate_participant(subject_id, root_dir, args.fps)
 
-    # Generate low cognitive load video
-    generate_video(
-        output_path=output_dir / "task_low_1.mp4",
-        duration_s=60.0,
-        fps=args.fps,
-        pupil_baseline=0.4,
-        pupil_variation=0.1,  # Small variation
-        blink_rate=18.0,  # Slightly higher blink rate
-    )
-
-    # Generate high cognitive load video (larger pupils, fewer blinks)
-    generate_video(
-        output_path=output_dir / "task_high_1.mp4",
-        duration_s=60.0,
-        fps=args.fps,
-        pupil_baseline=0.7,  # Larger baseline (dilated)
-        pupil_variation=0.2,  # More variation
-        blink_rate=10.0,  # Fewer blinks (cognitive load reduces blink rate)
-    )
-
-    # Generate manifest CSV
-    manifest_data = {
-        "video_file": ["calib_60s.mp4", "task_low_1.mp4", "task_high_1.mp4"],
-        "label": ["none", "low", "high"],
-        "role": ["calibration", "train", "train"],
-        "user_id": ["user01", "user01", "user01"],
-        "notes": ["neutral baseline", "low cognitive load", "high cognitive load"],
-    }
-
-    manifest_df = pd.DataFrame(manifest_data)
-    manifest_path = output_dir / "meta.csv"
-    manifest_df.to_csv(manifest_path, index=False)
-
-    print(f"\nManifest saved to {manifest_path}")
-    print("\nSample data generation complete!")
+    print("\n" + "=" * 80)
+    print("Generation complete!")
+    print(f"Output directory: {root_dir}")
     print("=" * 80)
 
 
 if __name__ == "__main__":
     main()
-

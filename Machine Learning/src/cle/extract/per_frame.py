@@ -2,6 +2,7 @@
 Per-frame feature computation.
 
 Computes ocular features from landmarks for each video frame.
+Focus on EAR (Eye Aspect Ratio) based features - pupil tracking removed.
 """
 
 from typing import Dict, List, Optional, Tuple
@@ -62,72 +63,8 @@ def eye_aspect_ratio(eye_coords: np.ndarray) -> float:
     return ear
 
 
-def iris_diameter(iris_coords: np.ndarray) -> float:
-    """
-    Compute iris diameter as maximum pairwise distance.
-
-    Args:
-        iris_coords: Array of 4 iris landmark coordinates [(x, y, z), ...]
-
-    Returns:
-        Maximum pairwise distance (proxy for pupil diameter)
-    """
-    if iris_coords is None or len(iris_coords) != 4:
-        return 0.0
-
-    # Extract 2D coordinates
-    points = iris_coords[:, :2]
-
-    # Compute all pairwise distances
-    max_dist = 0.0
-    for i in range(len(points)):
-        for j in range(i + 1, len(points)):
-            dist = euclidean_distance(points[i], points[j])
-            max_dist = max(max_dist, dist)
-
-    return max_dist
-
-
-def intercanthus_distance(landmarks: np.ndarray, left_inner: int, right_inner: int) -> float:
-    """
-    Compute distance between inner eye corners (inter-canthus distance).
-
-    This is used for normalizing pupil size to account for distance from camera.
-
-    Args:
-        landmarks: Full landmark array
-        left_inner: Index of left eye inner corner
-        right_inner: Index of right eye inner corner
-
-    Returns:
-        Distance between inner eye corners
-    """
-    if landmarks is None or len(landmarks) <= max(left_inner, right_inner):
-        return 0.0
-
-    p1 = landmarks[left_inner][:2]
-    p2 = landmarks[right_inner][:2]
-
-    return euclidean_distance(p1, p2)
-
-
-def compute_pupil_norm(iris_diam: float, intercanthus: float) -> float:
-    """
-    Compute normalized pupil size.
-
-    Normalization accounts for varying distance from camera.
-
-    Args:
-        iris_diam: Iris diameter (from iris_diameter())
-        intercanthus: Inter-canthus distance (from intercanthus_distance())
-
-    Returns:
-        Normalized pupil size (iris_diam / intercanthus)
-    """
-    if intercanthus < 1e-6:
-        return 0.0
-
-    return iris_diam / intercanthus
+# Pupil/iris functions removed - no longer tracking pupil diameter
+# Focus shifted to EAR-based features which are more robust and calibration-free
 
 
 def compute_brightness(frame: np.ndarray, face_roi: Optional[Tuple[int, int, int, int]] = None) -> float:
@@ -199,6 +136,8 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
     """
     Extract all per-frame features from frame and landmarks.
 
+    Note: Pupil tracking removed - focus on EAR-based features only.
+
     Args:
         frame: Input frame (BGR)
         landmark_result: Result from FaceMeshExtractor.process_frame()
@@ -208,9 +147,6 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
             - ear_left: Left eye aspect ratio
             - ear_right: Right eye aspect ratio
             - ear_mean: Mean EAR (blink proxy)
-            - pupil_left: Left pupil diameter (normalized)
-            - pupil_right: Right pupil diameter (normalized)
-            - pupil_mean: Mean pupil diameter (normalized)
             - brightness: Face region brightness
             - quality: Detection quality
             - valid: Whether frame has valid features
@@ -220,9 +156,6 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
         "ear_left": 0.0,
         "ear_right": 0.0,
         "ear_mean": 0.0,
-        "pupil_left": 0.0,
-        "pupil_right": 0.0,
-        "pupil_mean": 0.0,
         "brightness": 0.0,
         "quality": 0.0,
         "valid": False,
@@ -236,28 +169,7 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
     ear_right = eye_aspect_ratio(landmark_result["right_eye"]["coords"])
     ear_mean = (ear_left + ear_right) / 2.0
 
-    # Extract pupil size (requires iris landmarks)
-    pupil_left = 0.0
-    pupil_right = 0.0
-    pupil_mean = 0.0
-
-    if landmark_result["left_iris"] is not None and landmark_result["right_iris"] is not None:
-        # Compute iris diameters
-        iris_diam_left = iris_diameter(landmark_result["left_iris"]["coords"])
-        iris_diam_right = iris_diameter(landmark_result["right_iris"]["coords"])
-
-        # Compute inter-canthus distance for normalization
-        # Using indices for inner eye corners
-        intercanthus = intercanthus_distance(
-            landmark_result["landmarks"],
-            133,  # left eye inner corner
-            362,  # right eye inner corner
-        )
-
-        # Normalize pupil sizes
-        pupil_left = compute_pupil_norm(iris_diam_left, intercanthus)
-        pupil_right = compute_pupil_norm(iris_diam_right, intercanthus)
-        pupil_mean = (pupil_left + pupil_right) / 2.0
+    # Pupil extraction removed - no longer tracking pupil diameter
 
     # Extract brightness from face ROI
     face_roi = extract_face_roi(landmark_result["landmarks_px"])
@@ -267,9 +179,6 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
         "ear_left": ear_left,
         "ear_right": ear_right,
         "ear_mean": ear_mean,
-        "pupil_left": pupil_left,
-        "pupil_right": pupil_right,
-        "pupil_mean": pupil_mean,
         "brightness": brightness,
         "quality": landmark_result["quality"],
         "valid": True,

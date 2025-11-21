@@ -36,7 +36,7 @@ def test_feature_names_consistency():
         "blink": {"ear_thresh": 0.21, "min_blink_ms": 120, "max_blink_ms": 400},
         "tepr": {"baseline_s": 10.0, "min_baseline_samples": 150},
         "features_enabled": {
-            "tepr": True,
+            "tepr": False,  # TEPR disabled
             "blinks": True,
             "perclos": True,
             "brightness": True,
@@ -49,15 +49,12 @@ def test_feature_names_consistency():
     config = Config(config_dict)
     feature_names = get_feature_names(config.to_dict())
 
-    # Check expected features are present
+    # Check expected features are present (no TEPR features)
     expected_features = [
-        "tepr_delta_mean",
-        "tepr_delta_peak",
-        "tepr_auc",
-        "tepr_baseline",
         "blink_rate",
         "blink_count",
         "mean_blink_duration",
+        "ear_std",
         "mean_brightness",
         "std_brightness",
         "perclos",
@@ -79,7 +76,7 @@ def test_feature_order_consistency():
         "blink": {"ear_thresh": 0.21, "min_blink_ms": 120, "max_blink_ms": 400},
         "tepr": {"baseline_s": 10.0, "min_baseline_samples": 150},
         "features_enabled": {
-            "tepr": True,
+            "tepr": False,  # TEPR disabled
             "blinks": True,
             "perclos": True,
             "brightness": True,
