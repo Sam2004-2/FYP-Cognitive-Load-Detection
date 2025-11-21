@@ -166,8 +166,10 @@ ImportError: libGL.so.1: cannot open shared object file
 - name: Install system dependencies
   run: |
     sudo apt-get update
-    sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+    sudo apt-get install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev
 ```
+
+**Note**: Ubuntu 24.04+ uses `libgl1` instead of the deprecated `libgl1-mesa-glx`
 
 ## Code Quality Tools
 
