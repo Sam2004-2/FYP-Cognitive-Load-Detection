@@ -91,9 +91,7 @@ class Config:
         if self._config["blink"]["min_blink_ms"] <= 0:
             raise ValueError("blink.min_blink_ms must be positive")
 
-        # Validate TEPR parameters
-        if self._config["tepr"]["baseline_s"] <= 0:
-            raise ValueError("tepr.baseline_s must be positive")
+        # TEPR validation removed - feature disabled
 
     def get(self, key: str, default: Any = None) -> Any:
         """

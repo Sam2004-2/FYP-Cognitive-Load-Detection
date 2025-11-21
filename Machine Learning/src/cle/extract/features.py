@@ -1,10 +1,11 @@
 """
 Window-level feature computation.
 
-Computes aggregated features over time windows: TEPR, blinks, PERCLOS, etc.
+Computes aggregated features over time windows: blinks, PERCLOS, etc.
+Note: TEPR (pupil-based) features have been removed - focus on EAR-based features.
 """
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 
@@ -13,74 +14,44 @@ from src.cle.logging_setup import get_logger
 logger = get_logger(__name__)
 
 
-def compute_tepr_features(
-    pupil_series: np.ndarray, fps: float, baseline_s: float = 10.0, min_baseline_samples: int = 150
-) -> Dict[str, float]:
+def _get_config_value(config: Union[Dict, Any], key: str, default: Any = None) -> Any:
     """
-    Compute Task-Evoked Pupillary Response (TEPR) features.
+    Get configuration value supporting both Config objects and plain dicts.
 
-    TEPR measures pupil dilation relative to a baseline period.
+    Supports dot notation for nested keys (e.g., 'blink.ear_thresh').
 
     Args:
-        pupil_series: Array of pupil diameter values (normalized)
-        fps: Frames per second
-        baseline_s: Baseline window duration in seconds
-        min_baseline_samples: Minimum samples needed for valid baseline
+        config: Configuration (Config object or dict)
+        key: Configuration key (supports dot notation)
+        default: Default value if key not found
 
     Returns:
-        Dictionary with TEPR features:
-            - tepr_delta_mean: Mean pupil change from baseline
-            - tepr_delta_peak: Peak pupil change from baseline
-            - tepr_auc: Area under curve (integral of change)
-            - tepr_baseline: Baseline pupil value
+        Configuration value or default
     """
-    if len(pupil_series) == 0:
-        return {
-            "tepr_delta_mean": 0.0,
-            "tepr_delta_peak": 0.0,
-            "tepr_auc": 0.0,
-            "tepr_baseline": 0.0,
-        }
+    # Try as plain dict first (handles both dict and Config.to_dict())
+    if isinstance(config, dict):
+        keys = key.split('.')
+        value = config
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+        return value
+    
+    # If config has a get method that supports dot notation (Config object)
+    if hasattr(config, 'get') and callable(config.get):
+        try:
+            return config.get(key, default)
+        except (AttributeError, TypeError):
+            pass
+    
+    return default
 
-    # Filter out invalid values (zeros)
-    valid_pupil = pupil_series[pupil_series > 0]
 
-    if len(valid_pupil) == 0:
-        return {
-            "tepr_delta_mean": 0.0,
-            "tepr_delta_peak": 0.0,
-            "tepr_auc": 0.0,
-            "tepr_baseline": 0.0,
-        }
-
-    # Compute baseline from first baseline_s seconds
-    baseline_frames = int(baseline_s * fps)
-
-    if baseline_frames < min_baseline_samples or len(valid_pupil) < baseline_frames:
-        # Not enough data for baseline, use median of all data
-        baseline = np.median(valid_pupil)
-    else:
-        # Use median of first baseline_s seconds
-        baseline_data = valid_pupil[:baseline_frames]
-        baseline = np.median(baseline_data)
-
-    # Compute changes from baseline
-    delta = valid_pupil - baseline
-
-    # TEPR features
-    tepr_delta_mean = float(np.mean(delta))
-    tepr_delta_peak = float(np.max(delta))
-
-    # Area under curve (integral using trapezoidal rule)
-    # Normalize by time to make it comparable across different window lengths
-    tepr_auc = float(np.trapz(delta) / len(delta))
-
-    return {
-        "tepr_delta_mean": tepr_delta_mean,
-        "tepr_delta_peak": tepr_delta_peak,
-        "tepr_auc": tepr_auc,
-        "tepr_baseline": float(baseline),
-    }
+# TEPR functions removed - pupil-based features are no longer used
+# Feature set now focuses on EAR-based (Eye Aspect Ratio) measurements which are
+# more robust and don't require calibration or special lighting conditions
 
 
 def detect_blinks(
@@ -151,21 +122,23 @@ def compute_blink_features(
             - blink_rate: Blinks per minute
             - blink_count: Total number of blinks
             - mean_blink_duration: Mean blink duration in ms
+            - ear_std: Standard deviation of EAR (eye openness variability)
     """
     if len(ear_series) == 0:
         return {
             "blink_rate": 0.0,
             "blink_count": 0.0,
             "mean_blink_duration": 0.0,
+            "ear_std": 0.0,
         }
 
     # Detect blinks
     blinks = detect_blinks(
         ear_series,
         fps,
-        ear_threshold=config.get("blink.ear_thresh", 0.21),
-        min_blink_ms=config.get("blink.min_blink_ms", 120),
-        max_blink_ms=config.get("blink.max_blink_ms", 400),
+        ear_threshold=_get_config_value(config, "blink.ear_thresh", 0.21),
+        min_blink_ms=_get_config_value(config, "blink.min_blink_ms", 120),
+        max_blink_ms=_get_config_value(config, "blink.max_blink_ms", 400),
     )
 
     # Compute blink rate (blinks per minute)
@@ -179,10 +152,16 @@ def compute_blink_features(
     else:
         mean_blink_duration = 0.0
 
+    # Compute EAR variability (std dev)
+    # Filter out zeros (invalid frames) before computing std
+    valid_ear = ear_series[ear_series > 0]
+    ear_std = float(np.std(valid_ear)) if len(valid_ear) > 0 else 0.0
+
     return {
         "blink_rate": blink_rate,
         "blink_count": float(len(blinks)),
         "mean_blink_duration": mean_blink_duration,
+        "ear_std": ear_std,
     }
 
 
@@ -234,7 +213,7 @@ def compute_control_features(
         std_brightness = 0.0
 
     # PERCLOS
-    ear_threshold = config.get("blink.ear_thresh", 0.21)
+    ear_threshold = _get_config_value(config, "blink.ear_thresh", 0.21)
     perclos = compute_perclos(ear_series, ear_threshold)
 
     return {
@@ -270,33 +249,24 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
 
     # Extract arrays
     ear_series = np.array([f["ear_mean"] for f in valid_frames])
-    pupil_series = np.array([f["pupil_mean"] for f in valid_frames])
     brightness_series = np.array([f["brightness"] for f in valid_frames])
 
-    # Compute TEPR features (if enabled)
-    if config.get("features_enabled.tepr", True):
-        tepr_features = compute_tepr_features(
-            pupil_series,
-            fps,
-            baseline_s=config.get("tepr.baseline_s", 10.0),
-            min_baseline_samples=config.get("tepr.min_baseline_samples", 150),
-        )
-        features.update(tepr_features)
+    # TEPR features removed - no longer computing pupil-based features
 
     # Compute blink features (if enabled)
-    if config.get("features_enabled.blinks", True):
+    if _get_config_value(config, "features_enabled.blinks", True):
         blink_features = compute_blink_features(ear_series, fps, config)
         features.update(blink_features)
 
     # Compute control features (if enabled)
-    if config.get("features_enabled.perclos", True) or config.get("features_enabled.brightness", True):
+    if _get_config_value(config, "features_enabled.perclos", True) or _get_config_value(config, "features_enabled.brightness", True):
         control_features = compute_control_features(brightness_series, ear_series, config)
 
-        if config.get("features_enabled.brightness", True):
+        if _get_config_value(config, "features_enabled.brightness", True):
             features["mean_brightness"] = control_features["mean_brightness"]
             features["std_brightness"] = control_features["std_brightness"]
 
-        if config.get("features_enabled.perclos", True):
+        if _get_config_value(config, "features_enabled.perclos", True):
             features["perclos"] = control_features["perclos"]
 
     # Add quality metrics
@@ -307,40 +277,35 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
     return features
 
 
-def get_zero_features(config: Dict) -> Dict[str, float]:
+def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
     """
     Get zero-valued features dictionary.
 
     Args:
-        config: Configuration dictionary
+        config: Configuration dictionary or Config object
 
     Returns:
         Dictionary with all features set to zero
     """
     features = {}
 
-    if config.get("features_enabled.tepr", True):
-        features.update({
-            "tepr_delta_mean": 0.0,
-            "tepr_delta_peak": 0.0,
-            "tepr_auc": 0.0,
-            "tepr_baseline": 0.0,
-        })
+    # TEPR features removed - no longer part of feature set
 
-    if config.get("features_enabled.blinks", True):
+    if _get_config_value(config, "features_enabled.blinks", True):
         features.update({
             "blink_rate": 0.0,
             "blink_count": 0.0,
             "mean_blink_duration": 0.0,
+            "ear_std": 0.0,
         })
 
-    if config.get("features_enabled.brightness", True):
+    if _get_config_value(config, "features_enabled.brightness", True):
         features.update({
             "mean_brightness": 0.0,
             "std_brightness": 0.0,
         })
 
-    if config.get("features_enabled.perclos", True):
+    if _get_config_value(config, "features_enabled.perclos", True):
         features["perclos"] = 0.0
 
     features.update({
@@ -351,40 +316,35 @@ def get_zero_features(config: Dict) -> Dict[str, float]:
     return features
 
 
-def get_feature_names(config: Dict) -> List[str]:
+def get_feature_names(config: Union[Dict, Any]) -> List[str]:
     """
     Get ordered list of feature names based on configuration.
 
     Args:
-        config: Configuration dictionary
+        config: Configuration dictionary or Config object
 
     Returns:
         Ordered list of feature names
     """
     feature_names = []
 
-    if config.get("features_enabled.tepr", True):
-        feature_names.extend([
-            "tepr_delta_mean",
-            "tepr_delta_peak",
-            "tepr_auc",
-            "tepr_baseline",
-        ])
+    # TEPR features removed - no longer part of feature set
 
-    if config.get("features_enabled.blinks", True):
+    if _get_config_value(config, "features_enabled.blinks", True):
         feature_names.extend([
             "blink_rate",
             "blink_count",
             "mean_blink_duration",
+            "ear_std",
         ])
 
-    if config.get("features_enabled.brightness", True):
+    if _get_config_value(config, "features_enabled.brightness", True):
         feature_names.extend([
             "mean_brightness",
             "std_brightness",
         ])
 
-    if config.get("features_enabled.perclos", True):
+    if _get_config_value(config, "features_enabled.perclos", True):
         feature_names.append("perclos")
 
     feature_names.extend([

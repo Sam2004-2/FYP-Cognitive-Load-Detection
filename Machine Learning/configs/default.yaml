@@ -29,7 +29,7 @@ tepr:
 
 # Feature flags - enable/disable specific feature groups
 features_enabled:
-  tepr: true           # Task-Evoked Pupillary Response features
+  tepr: false          # Task-Evoked Pupillary Response features (DISABLED - requires calibration)
   blinks: true         # Blink rate and statistics
   perclos: true        # Percentage of eye closure
   brightness: true     # Ambient brightness control
