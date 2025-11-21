@@ -1,0 +1,23 @@
+{
+  "training_date": "2025-11-07T12:57:09.587235",
+  "config_hash": "b409f0b224184304351a7d2b93cce287",
+  "model_type": "logreg",
+  "calibration_method": "platt",
+  "n_train_samples": 14,
+  "n_test_samples": 4,
+  "train_accuracy": 1.0,
+  "feature_names": [
+    "tepr_delta_mean",
+    "tepr_delta_peak",
+    "tepr_auc",
+    "tepr_baseline",
+    "blink_rate",
+    "blink_count",
+    "mean_blink_duration",
+    "mean_brightness",
+    "std_brightness",
+    "perclos",
+    "mean_quality",
+    "valid_frame_ratio"
+  ]
+}

@@ -14,10 +14,10 @@ from src.cle.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
-# MediaPipe Face Mesh landmark indices
+# MediaPipe Face Mesh landmark indices from https://storage.googleapis.com/mediapipe-assets/documentation/mediapipe_face_landmark_fullsize.png
 # Eyes (for EAR computation)
-LEFT_EYE_INDICES = [33, 160, 158, 133, 153, 144]  # 6 points for left eye
-RIGHT_EYE_INDICES = [362, 385, 387, 263, 373, 380]  # 6 points for right eye
+LEFT_EYE_INDICES = [33, 160, 158, 133, 153, 144]  # 6 points for left eye these come from google mediapipe documentation
+RIGHT_EYE_INDICES = [362, 385, 387, 263, 373, 380]  # 6 points for right eye these come from google mediapipe documentation
 
 # Iris landmarks (4 points per iris)
 LEFT_IRIS_INDICES = [469, 470, 471, 472]
