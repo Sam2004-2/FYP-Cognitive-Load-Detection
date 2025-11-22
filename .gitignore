@@ -49,6 +49,7 @@ coverage.xml
 *.h5
 *.pkl
 *.joblib
+data/
 data/raw/videos/
 data/processed/
 !data/raw/manifest.csv
@@ -58,10 +59,13 @@ models/*.joblib
 models/*.pkl
 !models/feature_spec.json
 
-# Logs
+# Logs and Reports
 *.log
 logs/
 reports/
+
+# Documentation (keep only root-level docs)
+Machine Learning/docs/
 
 # Node
 node_modules/
