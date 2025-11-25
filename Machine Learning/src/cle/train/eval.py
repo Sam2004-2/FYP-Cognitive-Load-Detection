@@ -14,6 +14,8 @@ from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
+    precision_score,
+    recall_score,
     roc_auc_score,
 )
 
@@ -57,12 +59,16 @@ def evaluate_model(
 
     # Compute metrics
     acc = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, zero_division=0)
+    recall = recall_score(y_test, y_pred, zero_division=0)
+    f1 = f1_score(y_test, y_pred, zero_division=0)
     auc = roc_auc_score(y_test, y_proba)
     cm = confusion_matrix(y_test, y_pred)
 
     metrics = {
         "accuracy": float(acc),
+        "precision": float(precision),
+        "recall": float(recall),
         "f1": float(f1),
         "auc": float(auc),
         "confusion_matrix": cm.tolist(),
@@ -71,7 +77,7 @@ def evaluate_model(
         "n_negative": int(np.sum(y_test == 0)),
     }
 
-    logger.info(f"Evaluation metrics: AUC={auc:.4f}, F1={f1:.4f}, Acc={acc:.4f}")
+    logger.info(f"Evaluation metrics: AUC={auc:.4f}, F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, Acc={acc:.4f}")
     logger.info(f"Confusion matrix:\n{cm}")
 
     return metrics
@@ -194,6 +200,8 @@ def main():
     logger.info("Model evaluation complete!")
     logger.info(f"AUC: {metrics['auc']:.4f}")
     logger.info(f"F1 Score: {metrics['f1']:.4f}")
+    logger.info(f"Precision: {metrics['precision']:.4f}")
+    logger.info(f"Recall: {metrics['recall']:.4f}")
     logger.info(f"Accuracy: {metrics['accuracy']:.4f}")
     logger.info(f"Report saved to: {report_path}")
     logger.info("=" * 80)
