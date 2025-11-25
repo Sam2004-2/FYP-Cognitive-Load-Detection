@@ -3,18 +3,19 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import LoadChart from '../components/LoadChart';
 import NasaTLXForm from '../components/NasaTLXForm';
 import { SessionData, NASATLXScores } from '../types';
-import { generateMockSessionData } from '../services/mockData';
 
 const Summary: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Get session data from navigation state or generate mock data
+  // Get session data from navigation state
   const sessionData: SessionData = location.state || {
-    duration: 300, // 5 minutes default
-    loadHistory: generateMockSessionData(5),
-    interventionCount: 2
+    duration: 0,
+    loadHistory: [],
+    interventionCount: 0
   };
+
+  const hasData = sessionData.loadHistory.length > 0;
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -92,21 +93,30 @@ const Summary: React.FC = () => {
         {/* Cognitive Load Chart */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Cognitive Load Over Time</h2>
-          <LoadChart data={sessionData.loadHistory} />
-          <div className="mt-4 flex justify-center space-x-6 text-sm">
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-load-low rounded mr-2"></div>
-              <span className="text-gray-600">Low (&lt;40%)</span>
+          {hasData ? (
+            <>
+              <LoadChart data={sessionData.loadHistory} />
+              <div className="mt-4 flex justify-center space-x-6 text-sm">
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-load-low rounded mr-2"></div>
+                  <span className="text-gray-600">Low (&lt;40%)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-load-medium rounded mr-2"></div>
+                  <span className="text-gray-600">Medium (40-70%)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-load-high rounded mr-2"></div>
+                  <span className="text-gray-600">High (&gt;70%)</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <p>No session data available.</p>
+              <p className="text-sm mt-2">Complete a session to see your cognitive load history.</p>
             </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-load-medium rounded mr-2"></div>
-              <span className="text-gray-600">Medium (40-70%)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-load-high rounded mr-2"></div>
-              <span className="text-gray-600">High (&gt;70%)</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* NASA-TLX Form */}
