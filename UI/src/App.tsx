@@ -4,6 +4,7 @@ import SessionSetup from './pages/SessionSetup';
 import ActiveSession from './pages/ActiveSession';
 import Summary from './pages/Summary';
 import Settings from './pages/Settings';
+import DataCollection from './pages/DataCollection';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="/summary" element={<Summary />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/history" element={<Summary />} />
+        <Route path="/collect" element={<DataCollection />} />
       </Routes>
     </Router>
   );

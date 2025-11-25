@@ -13,6 +13,7 @@ from typing import Tuple
 
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -135,6 +136,7 @@ def create_model(config: dict):
             max_iter=params.get("max_iter", 1000),
             C=params.get("C", 1.0),
             penalty=params.get("penalty", "l2"),
+            class_weight='balanced',
             random_state=config.get("seed", 42),
         )
         logger.info(f"Created LogisticRegression model with params: {params}")
@@ -212,13 +214,21 @@ def main():
         features_df, feature_names, config.to_dict()
     )
 
-    # Handle NaN values
-    if np.any(np.isnan(X_train)):
-        logger.warning("Found NaN values in training data, replacing with zeros")
-        X_train = np.nan_to_num(X_train, nan=0.0)
-    if np.any(np.isnan(X_test)):
-        logger.warning("Found NaN values in test data, replacing with zeros")
-        X_test = np.nan_to_num(X_test, nan=0.0)
+    # Warn about small sample sizes
+    MIN_SAMPLES_WARNING = 50
+    if len(X_train) < MIN_SAMPLES_WARNING:
+        logger.warning(
+            f"Training on only {len(X_train)} samples. "
+            f"Recommend at least {MIN_SAMPLES_WARNING} for reliable results. "
+            f"Metrics may show overfitting."
+        )
+
+    # Handle NaN values with median imputation (preserves distribution better than zeros)
+    if np.any(np.isnan(X_train)) or np.any(np.isnan(X_test)):
+        logger.warning("Found NaN values, imputing with median strategy")
+        imputer = SimpleImputer(strategy='median')
+        X_train = imputer.fit_transform(X_train)
+        X_test = imputer.transform(X_test)
 
     # Create and fit scaler
     logger.info("Fitting StandardScaler...")
@@ -257,17 +267,23 @@ def main():
     # Save artifacts
     logger.info("Saving model artifacts...")
 
-    # Save scaler
-    save_model_artifact(scaler, output_dir / "scaler.bin")
+    # Create versioned filenames
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    version = f"v1_{timestamp}"
 
-    # Save calibrated model
-    save_model_artifact(calibrated_model, output_dir / "model.bin")
-
-    # Save feature spec
+    # Save versioned artifacts
+    save_model_artifact(scaler, output_dir / f"scaler_{version}.bin")
+    save_model_artifact(calibrated_model, output_dir / f"model_{version}.bin")
+    
     feature_spec = {
         "features": feature_names,
         "n_features": len(feature_names),
     }
+    save_json(feature_spec, output_dir / f"feature_spec_{version}.json")
+
+    # Also save without version for backward compatibility
+    save_model_artifact(scaler, output_dir / "scaler.bin")
+    save_model_artifact(calibrated_model, output_dir / "model.bin")
     save_json(feature_spec, output_dir / "feature_spec.json")
 
     # Save calibration metadata
