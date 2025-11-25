@@ -126,10 +126,10 @@ def compute_blink_features(
     """
     if len(ear_series) == 0:
         return {
-            "blink_rate": 0.0,
-            "blink_count": 0.0,
-            "mean_blink_duration": 0.0,
-            "ear_std": 0.0,
+            "blink_rate": np.nan,
+            "blink_count": np.nan,
+            "mean_blink_duration": np.nan,
+            "ear_std": np.nan,
         }
 
     # Detect blinks
@@ -243,8 +243,8 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
     valid_frames = [f for f in window_data if f.get("valid", False)]
 
     if not valid_frames:
-        # Return zero features if no valid frames
-        logger.warning("No valid frames in window, returning zero features")
+        # Return NaN features if no valid frames (distinguishes from real zeros)
+        logger.warning("No valid frames in window, returning NaN features")
         return get_zero_features(config)
 
     # Extract arrays
@@ -279,13 +279,13 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
 
 def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
     """
-    Get zero-valued features dictionary.
+    Get NaN-valued features dictionary for invalid windows.
 
     Args:
         config: Configuration dictionary or Config object
 
     Returns:
-        Dictionary with all features set to zero
+        Dictionary with all features set to NaN
     """
     features = {}
 
@@ -293,24 +293,24 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
 
     if _get_config_value(config, "features_enabled.blinks", True):
         features.update({
-            "blink_rate": 0.0,
-            "blink_count": 0.0,
-            "mean_blink_duration": 0.0,
-            "ear_std": 0.0,
+            "blink_rate": np.nan,
+            "blink_count": np.nan,
+            "mean_blink_duration": np.nan,
+            "ear_std": np.nan,
         })
 
     if _get_config_value(config, "features_enabled.brightness", True):
         features.update({
-            "mean_brightness": 0.0,
-            "std_brightness": 0.0,
+            "mean_brightness": np.nan,
+            "std_brightness": np.nan,
         })
 
     if _get_config_value(config, "features_enabled.perclos", True):
-        features["perclos"] = 0.0
+        features["perclos"] = np.nan
 
     features.update({
-        "mean_quality": 0.0,
-        "valid_frame_ratio": 0.0,
+        "mean_quality": np.nan,
+        "valid_frame_ratio": np.nan,
     })
 
     return features

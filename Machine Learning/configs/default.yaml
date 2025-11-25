@@ -8,13 +8,13 @@ fps_fallback: 30.0
 
 # Windowing parameters
 windows:
-  length_s: 20.0  # Window length in seconds
-  step_s: 5.0     # Step size in seconds (overlap = length - step)
+  length_s: 10.0  # Window length in seconds (reduced for better temporal resolution)
+  step_s: 2.5     # Step size in seconds (overlap = length - step)
 
 # Quality control thresholds
 quality:
   min_face_conf: 0.5        # Minimum face detection confidence
-  max_bad_frame_ratio: 0.2  # Maximum ratio of bad frames per window
+  max_bad_frame_ratio: 0.05 # Maximum ratio of bad frames per window (5% for better quality)
 
 # Blink detection parameters
 blink:
@@ -42,7 +42,7 @@ model:
   calibration: "platt"    # Calibration method: "platt" or "isotonic"
   logreg_params:
     max_iter: 1000
-    C: 1.0
+    C: 0.1  # Stronger regularization for small datasets
     penalty: "l2"
   gbt_params:
     n_estimators: 100

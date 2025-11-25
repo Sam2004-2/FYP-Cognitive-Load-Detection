@@ -11,3 +11,123 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #f3f4f6;
 }
+
+/* Dark theme wrapper for task components in Data Collection mode */
+.task-dark-wrapper * {
+  color: white;
+}
+
+/* Background overrides */
+.task-dark-wrapper .bg-white {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+.task-dark-wrapper .bg-gray-50 {
+  background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.task-dark-wrapper .bg-gray-100 {
+  background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.task-dark-wrapper .bg-gray-200 {
+  background-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+/* Number pad and button hover states */
+.task-dark-wrapper .bg-gray-100:hover,
+.task-dark-wrapper .hover\:bg-gray-200:hover {
+  background-color: rgb(107 114 128) !important; /* gray-500 */
+}
+
+/* Math task gradient backgrounds */
+.task-dark-wrapper .from-emerald-50 {
+  --tw-gradient-from: rgb(6 78 59 / 0.3) !important; /* emerald-900/30 */
+}
+
+.task-dark-wrapper .to-teal-50 {
+  --tw-gradient-to: rgb(19 78 74 / 0.3) !important; /* teal-900/30 */
+}
+
+/* Mode selector buttons */
+.task-dark-wrapper .bg-indigo-100 {
+  background-color: rgb(49 46 129 / 0.4) !important; /* indigo-900/40 */
+}
+
+/* Progress dots */
+.task-dark-wrapper .bg-indigo-300 {
+  background-color: rgb(79 70 229) !important; /* indigo-600 */
+}
+
+/* Red variants for delete/clear buttons */
+.task-dark-wrapper .bg-red-100 {
+  background-color: rgb(127 29 29 / 0.4) !important; /* red-900/40 */
+}
+
+.task-dark-wrapper .bg-red-100:hover,
+.task-dark-wrapper .hover\:bg-red-200:hover {
+  background-color: rgb(153 27 27 / 0.6) !important; /* red-800/60 */
+}
+
+/* Green feedback backgrounds */
+.task-dark-wrapper .bg-green-100 {
+  background-color: rgb(20 83 45 / 0.4) !important; /* green-900/40 */
+}
+
+/* Text color overrides */
+.task-dark-wrapper .text-gray-800 {
+  color: white !important;
+}
+
+.task-dark-wrapper .text-gray-700 {
+  color: rgb(209 213 219) !important; /* gray-300 */
+}
+
+.task-dark-wrapper .text-gray-600 {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.task-dark-wrapper .text-gray-500 {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.task-dark-wrapper .text-gray-400 {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+/* Border overrides */
+.task-dark-wrapper .border-gray-200 {
+  border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.task-dark-wrapper .border-gray-300 {
+  border-color: rgb(75 85 99) !important; /* gray-600 */
+}
+
+.task-dark-wrapper .border-gray-100 {
+  border-color: rgb(55 65 81) !important; /* gray-700 */
+}
+
+/* Input field styling */
+.task-dark-wrapper input {
+  background-color: rgb(55 65 81) !important; /* gray-700 */
+  border-color: rgb(75 85 99) !important; /* gray-600 */
+  color: white !important;
+}
+
+.task-dark-wrapper input::placeholder {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.task-dark-wrapper input:focus {
+  border-color: rgb(99 102 241) !important; /* indigo-500 */
+}
+
+/* Summary/details styling */
+.task-dark-wrapper summary {
+  color: rgb(156 163 175) !important; /* gray-400 */
+}
+
+.task-dark-wrapper summary:hover {
+  color: white !important;
+}

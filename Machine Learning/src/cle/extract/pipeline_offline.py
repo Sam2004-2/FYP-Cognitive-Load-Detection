@@ -72,8 +72,8 @@ def process_video(
 
     cap.release()
 
-    # Interpolate small gaps
-    frame_features = interpolate_gaps(frame_features, max_gap=3)
+    # Interpolate only single-frame dropouts (avoid creating fake blinks)
+    frame_features = interpolate_gaps(frame_features, max_gap=1)
 
     logger.info(
         f"Processed {len(frame_features)} frames from {Path(video_path).name} "

@@ -11,13 +11,13 @@ fps_fallback: 30.0
 
 # Windowing parameters
 windows:
-  length_s: 20.0  # Window length in seconds
-  step_s: 5.0     # Step size in seconds (overlap = length - step)
+  length_s: 10.0  # Window length in seconds (reduced for better temporal resolution)
+  step_s: 2.5     # Step size in seconds (overlap = length - step)
 
 # Quality control thresholds
 quality:
   min_face_conf: 0.5        # Minimum face detection confidence
-  max_bad_frame_ratio: 0.2  # Maximum ratio of bad frames per window
+  max_bad_frame_ratio: 0.05 # Maximum ratio of bad frames per window (5% for better quality)
 
 # Blink detection parameters
 blink:

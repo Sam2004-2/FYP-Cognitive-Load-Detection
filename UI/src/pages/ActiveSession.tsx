@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CognitiveLoadGauge from '../components/CognitiveLoadGauge';
 import WebcamFeed from '../components/WebcamFeed';
-import { generateMockCognitiveLoad, resetMockData } from '../services/mockData';
+import LiveFeaturePanel from '../components/LiveFeaturePanel';
+import TaskPanel from '../components/tasks/TaskPanel';
 import { CognitiveLoadData } from '../types';
+import { WindowBuffer, validateWindowQuality } from '../services/windowBuffer';
+import { computeWindowFeatures } from '../services/featureExtraction';
+import { predictCognitiveLoad, testConnection } from '../services/apiClient';
+import { FrameFeatures, WindowFeatures } from '../types/features';
+import { FEATURE_CONFIG } from '../config/featureConfig';
 
 const ActiveSession: React.FC = () => {
   const navigate = useNavigate();
@@ -13,11 +19,51 @@ const ActiveSession: React.FC = () => {
   const [showIntervention, setShowIntervention] = useState<boolean>(false);
   const [interventionCount, setInterventionCount] = useState<number>(0);
   const [loadHistory, setLoadHistory] = useState<CognitiveLoadData[]>([]);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [lastPredictionTime, setLastPredictionTime] = useState<number>(0);
+  const [confidence, setConfidence] = useState<number>(0);
+  
+  // Live feature display state
+  const [currentFrameFeatures, setCurrentFrameFeatures] = useState<FrameFeatures | null>(null);
+  const [currentWindowFeatures, setCurrentWindowFeatures] = useState<WindowFeatures | null>(null);
+  const [totalBlinkCount, setTotalBlinkCount] = useState<number>(0);
+  const [showFeaturePanel, setShowFeaturePanel] = useState<boolean>(true);
 
+  // Window buffer for collecting frame features
+  const windowBufferRef = useRef<WindowBuffer>(
+    new WindowBuffer(
+      FEATURE_CONFIG.windows.length_s,
+      FEATURE_CONFIG.video.fps
+    )
+  );
+
+  // Refs to hold current values for use in callbacks (avoids stale closure issues)
+  const currentLoadRef = useRef(currentLoad);
+  const sessionTimeRef = useRef(sessionTime);
+  const showInterventionRef = useRef(showIntervention);
+  const lastPredictionTimeRef = useRef(lastPredictionTime);
+  const isPausedRef = useRef(isPaused);
+
+  // Keep refs in sync with state
+  useEffect(() => { currentLoadRef.current = currentLoad; }, [currentLoad]);
+  useEffect(() => { sessionTimeRef.current = sessionTime; }, [sessionTime]);
+  useEffect(() => { showInterventionRef.current = showIntervention; }, [showIntervention]);
+  useEffect(() => { lastPredictionTimeRef.current = lastPredictionTime; }, [lastPredictionTime]);
+  useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
+
+  // Check backend connection on mount
   useEffect(() => {
-    resetMockData();
+    const checkBackend = async () => {
+      const isConnected = await testConnection();
+      setBackendStatus(isConnected ? 'connected' : 'error');
+      if (!isConnected) {
+        console.error('Backend is not available. Please start the backend server.');
+      }
+    };
+    checkBackend();
   }, []);
 
+  // Session timer
   useEffect(() => {
     if (!isPaused) {
       const timer = setInterval(() => {
@@ -27,22 +73,98 @@ const ActiveSession: React.FC = () => {
     }
   }, [isPaused]);
 
-  useEffect(() => {
-    if (!isPaused) {
-      const loadInterval = setInterval(() => {
-        const newLoad = generateMockCognitiveLoad();
-        setCurrentLoad(newLoad);
-        setLoadHistory((prev) => [...prev, { timestamp: sessionTime, load: newLoad }]);
+  // Make prediction from current window (uses refs to avoid stale closures)
+  const makePrediction = useCallback(async () => {
+    try {
+      // Get window data
+      const windowData = windowBufferRef.current.getWindow();
 
-        // Trigger intervention if load is high
-        if (newLoad > 0.7 && !showIntervention) {
+      // Validate window quality
+      const [isValid, badRatio] = validateWindowQuality(windowData);
+
+      if (!isValid) {
+        console.warn(`Low quality window (bad ratio: ${badRatio.toFixed(2)}), skipping prediction`);
+        // Don't update lastPredictionTime - allow immediate retry when quality improves
+        return;
+      }
+
+      // Compute window features
+      const windowFeatures = computeWindowFeatures(windowData, FEATURE_CONFIG.video.fps);
+
+      // Send to backend for prediction
+      const result = await predictCognitiveLoad(windowFeatures);
+
+      if (result.success) {
+        // Apply EWMA smoothing (use ref for current value)
+        const alpha = FEATURE_CONFIG.realtime.smoothing_alpha;
+        const smoothedLoad = alpha * result.cli + (1 - alpha) * currentLoadRef.current;
+
+        setCurrentLoad(smoothedLoad);
+        setConfidence(result.confidence);
+        setLoadHistory((prev) => [...prev, { timestamp: sessionTimeRef.current, load: smoothedLoad }]);
+
+        console.log(
+          `Prediction: CLI=${smoothedLoad.toFixed(3)}, ` +
+          `confidence=${result.confidence.toFixed(3)}, ` +
+          `valid_ratio=${windowFeatures.valid_frame_ratio.toFixed(3)}`
+        );
+
+        // Trigger intervention if load is high and confidence is sufficient
+        if (
+          smoothedLoad > 0.7 &&
+          result.confidence > FEATURE_CONFIG.realtime.conf_threshold &&
+          !showInterventionRef.current
+        ) {
           setShowIntervention(true);
           setInterventionCount((prev) => prev + 1);
         }
-      }, 2000);
-      return () => clearInterval(loadInterval);
+      }
+
+      setLastPredictionTime(Date.now() / 1000);
+    } catch (error) {
+      console.error('Prediction error:', error);
+      setBackendStatus('error');
     }
-  }, [isPaused, sessionTime, showIntervention]);
+  }, []); // No dependencies needed - uses refs for mutable values
+
+  // Track last window feature update time
+  const lastWindowUpdateRef = useRef<number>(0);
+  const prevEarRef = useRef<number>(0.3);
+
+  // Handle frame features from webcam
+  const handleFrameFeatures = useCallback((features: FrameFeatures) => {
+    if (isPausedRef.current) return;
+
+    // Update current frame features for display
+    setCurrentFrameFeatures(features);
+
+    // Simple blink detection: EAR drops below threshold then rises
+    if (features.valid && features.ear_mean < FEATURE_CONFIG.blink.ear_thresh && prevEarRef.current >= FEATURE_CONFIG.blink.ear_thresh) {
+      setTotalBlinkCount(prev => prev + 1);
+    }
+    prevEarRef.current = features.ear_mean;
+
+    // Add frame to buffer
+    windowBufferRef.current.addFrame(features);
+
+    // Update window features for display every 500ms
+    const now = Date.now() / 1000;
+    if (windowBufferRef.current.length > 0 && now - lastWindowUpdateRef.current >= 0.5) {
+      const windowData = windowBufferRef.current.getWindow();
+      if (windowData.length > 0) {
+        const windowFeatures = computeWindowFeatures(windowData, FEATURE_CONFIG.video.fps);
+        setCurrentWindowFeatures(windowFeatures);
+      }
+      lastWindowUpdateRef.current = now;
+    }
+
+    // Check if it's time to make a prediction
+    const stepS = FEATURE_CONFIG.windows.step_s;
+
+    if (windowBufferRef.current.isReady() && now - lastPredictionTimeRef.current >= stepS) {
+      makePrediction();
+    }
+  }, [makePrediction]); // Only depends on makePrediction which is stable
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -66,7 +188,6 @@ const ActiveSession: React.FC = () => {
 
   const snoozeIntervention = () => {
     setShowIntervention(false);
-    // Could implement re-trigger after delay if needed
   };
 
   return (
@@ -80,6 +201,32 @@ const ActiveSession: React.FC = () => {
                 {formatTime(sessionTime)}
               </div>
               <CognitiveLoadGauge load={currentLoad} />
+              
+              {/* Backend status indicator */}
+              <div className="flex items-center space-x-2">
+                {backendStatus === 'checking' && (
+                  <span className="text-xs text-gray-500">Connecting...</span>
+                )}
+                {backendStatus === 'connected' && (
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    <span className="text-xs text-gray-600">Backend Connected</span>
+                  </div>
+                )}
+                {backendStatus === 'error' && (
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="text-xs text-red-600">Backend Error</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Confidence indicator */}
+              {confidence > 0 && (
+                <div className="text-xs text-gray-600">
+                  Confidence: {(confidence * 100).toFixed(0)}%
+                </div>
+              )}
             </div>
             <div className="flex space-x-3">
               <button
@@ -102,38 +249,46 @@ const ActiveSession: React.FC = () => {
       {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Learning Content Area */}
+          {/* Task Area */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-8 min-h-[500px]">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Learning Content</h2>
-              <div className="text-gray-600 space-y-4">
-                <p>
-                  This is your learning content area. In a full implementation, you would import or display
-                  study materials, lectures, or documents here.
-                </p>
-                <p>
-                  The system monitors your cognitive load in real-time while you study and provides
-                  intelligent interventions when needed.
-                </p>
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mt-6">
-                  <p className="text-sm text-blue-800">
-                    <strong>Tip:</strong> The cognitive load indicator in the header updates every 2 seconds
-                    based on facial feature analysis.
-                  </p>
-                </div>
-              </div>
+            <div className="bg-white rounded-lg shadow-md p-6 min-h-[500px]">
+              <TaskPanel 
+                onTaskComplete={(correct, taskType, difficulty) => {
+                  console.log(`Task completed: ${taskType} (${difficulty}) - ${correct ? 'Correct' : 'Incorrect'}`);
+                }}
+              />
             </div>
           </div>
 
-          {/* Webcam Feed */}
-          <div className="lg:col-span-1">
+          {/* Webcam Feed & Features */}
+          <div className="lg:col-span-1 space-y-4">
             <div className="bg-white rounded-lg shadow-md p-4">
               <h3 className="text-lg font-semibold text-gray-800 mb-3">Camera Feed</h3>
-              <WebcamFeed isActive={!isPaused} />
-              <div className="mt-4 text-xs text-gray-500">
-                <p>All processing happens locally. No data is transmitted.</p>
+              <WebcamFeed 
+                isActive={!isPaused} 
+                onFrameFeatures={handleFrameFeatures}
+                showOverlay={false}
+              />
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs text-gray-500">Feature extraction active</span>
+                <button
+                  onClick={() => setShowFeaturePanel(!showFeaturePanel)}
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  {showFeaturePanel ? 'Hide' : 'Show'} Features
+                </button>
               </div>
             </div>
+
+            {/* Live Feature Panel */}
+            {showFeaturePanel && (
+              <LiveFeaturePanel
+                frameFeatures={currentFrameFeatures}
+                windowFeatures={currentWindowFeatures}
+                blinkCount={totalBlinkCount}
+                bufferFill={windowBufferRef.current?.fillRatio || 0}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -179,4 +334,3 @@ const ActiveSession: React.FC = () => {
 };
 
 export default ActiveSession;
-
