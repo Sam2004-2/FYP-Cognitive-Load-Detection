@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Difficulty } from './TaskPanel';
 
+// Props define the component's contract with its parent ***
 interface MemoryTaskProps {
-  difficulty: Difficulty;
-  onComplete: (correct: boolean) => void;
+  difficulty: Difficulty;                 // Controls sequence length and timing ***
+  onComplete: (correct: boolean) => void; // Required callback - no optional marker ***
 }
 
+// Union type limits task mode to only valid options ***
 type TaskMode = 'sequence' | 'nback';
 
 const MemoryTask: React.FC<MemoryTaskProps> = ({ difficulty, onComplete }) => {
@@ -17,10 +19,11 @@ const MemoryTask: React.FC<MemoryTaskProps> = ({ difficulty, onComplete }) => {
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [showingDigit, setShowingDigit] = useState<number | null>(null);
   
-  // N-back specific state
+  // N-back specific state - implements working memory assessment paradigm ***
+  // N-back tests if current item matches item N positions back in sequence ***
   const [nbackSequence, setNbackSequence] = useState<number[]>([]);
   const [nbackIndex, setNbackIndex] = useState(0);
-  const [nbackN, setNbackN] = useState(1);
+  const [nbackN, setNbackN] = useState(1);  // N value determines difficulty (1-back, 2-back, etc.) ***
   const [nbackScore, setNbackScore] = useState({ hits: 0, misses: 0, falseAlarms: 0 });
   const [nbackTrials, setNbackTrials] = useState(0);
   const [nbackFeedback, setNbackFeedback] = useState<'correct' | 'wrong' | null>(null);
@@ -50,6 +53,8 @@ const MemoryTask: React.FC<MemoryTaskProps> = ({ difficulty, onComplete }) => {
     return seq;
   }, [getSequenceLength]);
 
+  // useCallback with [difficulty] dependency - recreates when difficulty changes ***
+  // Generates controlled sequence with ~30% match rate for balanced challenge ***
   const generateNbackSequence = useCallback(() => {
     const n = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
     setNbackN(n);
@@ -57,10 +62,10 @@ const MemoryTask: React.FC<MemoryTaskProps> = ({ difficulty, onComplete }) => {
     const length = 15 + (difficulty === 'hard' ? 5 : 0);
     const seq: number[] = [];
     
-    // Generate sequence with ~30% matches
+    // Generate sequence with ~30% matches - balances difficulty vs frustration ***
     for (let i = 0; i < length; i++) {
       if (i >= n && Math.random() < 0.3) {
-        // Create a match
+        // Create a match by copying from n positions back ***
         seq.push(seq[i - n]);
       } else {
         // Random digit (avoiding accidental matches where possible)
@@ -399,4 +404,5 @@ const MemoryTask: React.FC<MemoryTaskProps> = ({ difficulty, onComplete }) => {
 };
 
 export default MemoryTask;
+
 

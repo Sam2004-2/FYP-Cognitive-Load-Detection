@@ -1,7 +1,7 @@
 /**
  * Feature extraction utilities.
  * 
- * Ported from Machine Learning/src/cle/extract/per_frame.py and features.py
+ * Converted from Pythonr to typscript 
  */
 
 import { FEATURE_CONFIG, LANDMARK_INDICES } from '../config/featureConfig';
@@ -15,14 +15,15 @@ function euclideanDistance(p1: { x: number; y: number }, p2: { x: number; y: num
 }
 
 /**
- * Calculate Eye Aspect Ratio (EAR) for blink detection.
+ * Calculate Eye Aspect Ratio (EAR) for blink detection ***
  * 
+ * EAR measures eye openness: ratio of vertical to horizontal eye dimensions ***
  * EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||)
  * 
  * Reference: Dewi et al. (2022) for EAR calculation
  * 
- * @param eyeCoords - Array of 6 eye landmark coordinates
- * @returns EAR value (typically 0.2-0.3 for open eye, <0.2 for closed)
+ * @param eyeCoords - Array of 6 eye landmark coordinates (specific order required) ***
+ * @returns EAR value (typically 0.25-0.35 for open eye, <0.21 for closed/blink) ***
  */
 export function eyeAspectRatio(eyeCoords: { x: number; y: number; z: number }[]): number {
   if (!eyeCoords || eyeCoords.length !== 6) {
@@ -39,7 +40,7 @@ export function eyeAspectRatio(eyeCoords: { x: number; y: number; z: number }[])
   // Horizontal distance
   const h = euclideanDistance(points[0], points[3]); // outer to inner
 
-  // Avoid division by zero
+  // Avoid division by zero to avoid errors*** To make sure 
   if (h < 1e-6) {
     return 0.0;
   }
@@ -185,14 +186,17 @@ export function extractFrameFeatures(
 }
 
 /**
- * Detect blinks from EAR time series using state machine.
+ * State machine blink detector - identifies blinks in EAR time series ***
  * 
- * @param earSeries - Array of EAR values
- * @param fps - Frames per second
- * @param earThreshold - EAR threshold for blink detection
- * @param minBlinkMs - Minimum blink duration in milliseconds
- * @param maxBlinkMs - Maximum blink duration in milliseconds
- * @returns Array of blinks with start and end frame indices
+ * State transitions: OPEN -> CLOSED (EAR drops) -> OPEN (EAR rises) ***
+ * Duration filtering excludes noise (too short) and extended closures (too long) ***
+ * 
+ * @param earSeries - Array of EAR values from frame features ***
+ * @param fps - Frames per second (needed to convert ms to frames) ***
+ * @param earThreshold - Below this = eye closed (default 0.21 from config) ***
+ * @param minBlinkMs - Reject if shorter (120ms) - probably noise ***
+ * @param maxBlinkMs - Reject if longer (400ms) - probably intentional closure ***
+ * @returns Array of valid blinks with frame indices ***
  */
 export function detectBlinks(
   earSeries: number[],
@@ -205,11 +209,14 @@ export function detectBlinks(
     return [];
   }
 
+  // Convering to frames to handle video data
   const minBlinkFrames = Math.floor((minBlinkMs / 1000.0) * fps);
   const maxBlinkFrames = Math.floor((maxBlinkMs / 1000.0) * fps);
 
   const blinks: Blink[] = [];
+  // Bool checks if in a blink
   let inBlink = false;
+  //Frame blink starts
   let blinkStart = 0;
 
   for (let i = 0; i < earSeries.length; i++) {
@@ -226,7 +233,7 @@ export function detectBlinks(
       if (ear >= earThreshold) {
         const blinkDuration = i - blinkStart;
 
-        // Validate blink duration
+        // Make sure blink duration is within range to exclude false positives***
         if (blinkDuration >= minBlinkFrames && blinkDuration <= maxBlinkFrames) {
           blinks.push({ start: blinkStart, end: i });
         }
@@ -267,11 +274,11 @@ export function computeBlinkFeatures(
   // Detect blinks
   const blinks = detectBlinks(earSeries, fps);
 
-  // Compute blink rate (blinks per minute)
+  // Blink rarte per min 
   const windowDurationMin = earSeries.length / fps / 60.0;
   const blinkRate = windowDurationMin > 0 ? blinks.length / windowDurationMin : 0.0;
 
-  // Compute mean blink duration
+  // Calculate mean blink 
   let meanBlinkDuration = 0.0;
   if (blinks.length > 0) {
     const durations = blinks.map((b) => ((b.end - b.start) / fps) * 1000);
@@ -298,11 +305,14 @@ export function computeBlinkFeatures(
 }
 
 /**
- * Compute PERCLOS (Percentage of Eye Closure).
+ * Compute PERCLOS - Percentage of Eye Closure ***
  * 
- * @param earSeries - Array of EAR values
- * @param earThreshold - EAR threshold
- * @returns PERCLOS value (0-1)
+ * Classic drowsiness/fatigue indicator from driver monitoring research ***
+ * High PERCLOS (>15%) suggests fatigue; correlates with cognitive overload ***
+ * 
+ * @param earSeries - Array of EAR values from window ***
+ * @param earThreshold - EAR threshold (same as blink detection) ***
+ * @returns PERCLOS value (0-1): proportion of frames with eyes closed ***
  */
 export function computePERCLOS(
   earSeries: number[],
@@ -317,11 +327,14 @@ export function computePERCLOS(
 }
 
 /**
- * Compute window-level features from frame features.
+ * MAIN AGGREGATION FUNCTION: Computes the 9 window features for ML model ***
  * 
- * @param frameData - Array of per-frame features
- * @param fps - Frames per second
- * @returns Window-level features
+ * Input: ~300 frames (10 seconds at 30fps) of per-frame features ***
+ * Output: Single WindowFeatures object ready for API prediction ***
+ * 
+ * @param frameData - Array of per-frame features from WindowBuffer ***
+ * @param fps - Frames per second (needed for time-based calculations) ***
+ * @returns WindowFeatures with all 9 features in expected order ***
  */
 export function computeWindowFeatures(
   frameData: FrameFeatures[],
