@@ -1,17 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Difficulty } from './TaskPanel';
 
+// Component props - difficulty controls problem complexity ***
 interface MathTaskProps {
   difficulty: Difficulty;
   onComplete: (correct: boolean) => void;
 }
 
+// Literal union type for arithmetic operators - uses unicode × and ÷ for display ***
 type Operation = '+' | '-' | '×' | '÷';
 
+// Interface defines the structure of a generated math problem ***
 interface Problem {
-  expression: string;
-  answer: number;
-  timeLimit: number;
+  expression: string;  // Displayed to user e.g. "5 + 3" ***
+  answer: number;      // Correct answer for validation ***
+  timeLimit: number;   // Seconds allowed to solve (varies by difficulty) ***
 }
 
 const MathTask: React.FC<MathTaskProps> = ({ difficulty, onComplete }) => {
@@ -107,9 +110,10 @@ const MathTask: React.FC<MathTaskProps> = ({ difficulty, onComplete }) => {
     setTimeRemaining(newProblem.timeLimit);
   }, [generateProblem]);
 
-  // Timer countdown
+  // useEffect runs when dependencies change - implements countdown timer ***
+  // Returns cleanup function to prevent memory leaks when component unmounts ***
   useEffect(() => {
-    if (phase !== 'solving' || !problem) return;
+    if (phase !== 'solving' || !problem) return;  // Early return pattern ***
 
     if (timeRemaining <= 0) {
       setTimedOut(true);
@@ -119,11 +123,12 @@ const MathTask: React.FC<MathTaskProps> = ({ difficulty, onComplete }) => {
       return;
     }
 
+    // setTimeout returns ID used in cleanup to cancel pending timer ***
     const timer = setTimeout(() => {
       setTimeRemaining(prev => prev - 1);
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return () => clearTimeout(timer);  // Cleanup function prevents stale timers ***
   }, [phase, timeRemaining, problem, onComplete]);
 
   // Initialize
@@ -131,15 +136,16 @@ const MathTask: React.FC<MathTaskProps> = ({ difficulty, onComplete }) => {
     startNewProblem();
   }, [startNewProblem]);
 
+  // Uses epsilon comparison (0.001) instead of strict equality for floating point safety ***
   const handleSubmit = () => {
-    if (!problem) return;
+    if (!problem) return;  // Type guard - early return if problem is null ***
     
     const userNum = parseFloat(userAnswer);
     const correct = !isNaN(userNum) && Math.abs(userNum - problem.answer) < 0.001;
     
     setIsCorrect(correct);
     setPhase('feedback');
-    onComplete(correct);
+    onComplete(correct);  // Notify parent of completion ***
   };
 
   const getTimerColor = () => {
@@ -302,4 +308,5 @@ const MathTask: React.FC<MathTaskProps> = ({ difficulty, onComplete }) => {
 };
 
 export default MathTask;
+
 

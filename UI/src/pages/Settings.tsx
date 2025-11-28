@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsType } from '../types';
+import { Settings as SettingsType } from '../types';  // Aliased to avoid name collision ***
 
+// Settings page for customising study parameters ***
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  // useState<SettingsType> provides type safety for the settings object ***
   const [settings, setSettings] = useState<SettingsType>({
-    interventionFrequency: 'medium',
-    breakInterval: 25
+    interventionFrequency: 'medium',  // Default intervention sensitivity ***
+    breakInterval: 25                 // Standard Pomodoro interval ***
   });
   const [showSaved, setShowSaved] = useState<boolean>(false);
 

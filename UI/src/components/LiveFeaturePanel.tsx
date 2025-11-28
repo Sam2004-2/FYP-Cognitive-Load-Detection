@@ -1,11 +1,13 @@
 import React from 'react';
 import { FrameFeatures, WindowFeatures } from '../types/features';
 
+// Interface defines all data needed to display real-time feature monitoring ***
+// Separates frame-level (per-frame) from window-level (aggregated) features ***
 interface LiveFeaturePanelProps {
-  frameFeatures: FrameFeatures | null;
-  windowFeatures: WindowFeatures | null;
-  blinkCount: number;
-  bufferFill: number;
+  frameFeatures: FrameFeatures | null;  // Current frame's extracted features ***
+  windowFeatures: WindowFeatures | null; // Aggregated features over 10s window ***
+  blinkCount: number;                    // Cumulative session blink counter ***
+  bufferFill: number;                    // Ring buffer fill ratio (0-1) ***
 }
 
 const LiveFeaturePanel: React.FC<LiveFeaturePanelProps> = ({
@@ -19,11 +21,13 @@ const LiveFeaturePanel: React.FC<LiveFeaturePanelProps> = ({
     return value.toFixed(decimals);
   };
 
-  const getEarStatus = (ear: number | undefined): { color: string; label: string } => {
-    if (ear === undefined || isNaN(ear)) return { color: 'bg-gray-400', label: 'Unknown' };
-    if (ear < 0.21) return { color: 'bg-red-500', label: 'Closed' };
-    if (ear < 0.25) return { color: 'bg-yellow-500', label: 'Partial' };
-    return { color: 'bg-green-500', label: 'Open' };
+  // Maps EAR value to eye state for visual feedback ***
+  // Thresholds: <0.21 = closed (blink), 0.21-0.25 = partial, >0.25 = open ***
+  const getEarStatus = (ear: number | undefined): { colour: string; label: string } => {
+    if (ear === undefined || isNaN(ear)) return { colour: 'bg-gray-400', label: 'Unknown' };
+    if (ear < 0.21) return { colour: 'bg-red-500', label: 'Closed' };
+    if (ear < 0.25) return { colour: 'bg-yellow-500', label: 'Partial' };
+    return { colour: 'bg-green-500', label: 'Open' };
   };
 
   const earStatus = getEarStatus(frameFeatures?.ear_mean);
@@ -44,7 +48,7 @@ const LiveFeaturePanel: React.FC<LiveFeaturePanelProps> = ({
             <div className="text-slate-400 text-[10px]">EAR (Mean)</div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold">{formatNumber(frameFeatures?.ear_mean, 3)}</span>
-              <span className={`${earStatus.color} text-[9px] px-1.5 py-0.5 rounded text-white`}>
+              <span className={`${earStatus.colour} text-[9px] px-1.5 py-0.5 rounded text-white`}>
                 {earStatus.label}
               </span>
             </div>
@@ -172,4 +176,5 @@ const LiveFeaturePanel: React.FC<LiveFeaturePanelProps> = ({
 };
 
 export default LiveFeaturePanel;
+
 
