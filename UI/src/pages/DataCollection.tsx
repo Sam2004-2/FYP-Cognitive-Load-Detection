@@ -10,18 +10,21 @@ import { FrameFeatures, WindowFeatures } from '../types/features';
 import { FEATURE_CONFIG } from '../config/featureConfig';
 import { saveTrainingData, testConnection } from '../services/apiClient';
 
+// Union type with null allows "no task selected" state ***
 type TaskType = 'memory' | 'math' | null;
 
+// Structure for each collected training sample - matches backend expected format ***
 interface CollectedSample {
-  timestamp: number;
-  windowIndex: number;
-  label: 'low' | 'high';
-  difficulty: 'easy' | 'medium' | 'hard';
-  taskType: string;
-  features: WindowFeatures;
-  validFrameRatio: number;
+  timestamp: number;                          // Unix timestamp for ordering ***
+  windowIndex: number;                        // Sample sequence number ***
+  label: 'low' | 'high';                      // Ground truth cognitive load label ***
+  difficulty: 'easy' | 'medium' | 'hard';     // Task difficulty that induced the load ***
+  taskType: string;                           // What task generated this sample ***
+  features: WindowFeatures;                   // 9 computed window features ***
+  validFrameRatio: number;                    // Data quality metric ***
 }
 
+// State machine phases for data collection flow ***
 type CollectionPhase = 'setup' | 'baseline' | 'task' | 'rest' | 'complete';
 
 const DataCollection: React.FC = () => {
@@ -107,18 +110,20 @@ const DataCollection: React.FC = () => {
     }
   }, [phase, phaseTime]);
 
-  // Use refs to track current values for sample collection (avoids stale closures)
+  // REF SYNC PATTERN: Same pattern as ActiveSession ***
+  // Refs provide stable references to current state in async callbacks ***
   const currentLabelRef = useRef(currentLabel);
   const currentDifficultyRef = useRef(currentDifficulty);
   const currentTaskTypeRef = useRef(currentTaskType);
-  const windowIndexRef = useRef(0);
+  const windowIndexRef = useRef(0);  // Counter for sample numbering ***
 
-  // Keep refs in sync
+  // Sync effects - run after each state change to update refs ***
   useEffect(() => { currentLabelRef.current = currentLabel; }, [currentLabel]);
   useEffect(() => { currentDifficultyRef.current = currentDifficulty; }, [currentDifficulty]);
   useEffect(() => { currentTaskTypeRef.current = currentTaskType; }, [currentTaskType]);
 
-  // Collect sample with current labels (uses refs to avoid stale closures)
+  // Collects one labeled training sample from current window buffer ***
+  // Returns boolean indicating success - allows caller to handle quality failures ***
   const collectSample = useCallback((): boolean => {
     const windowData = windowBufferRef.current.getWindow();
     const [isValid, badRatio] = validateWindowQuality(windowData);
@@ -346,11 +351,11 @@ const DataCollection: React.FC = () => {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const getLabelColor = (label: 'low' | 'high') => {
+  const getLabelColour = (label: 'low' | 'high') => {
     return label === 'high' ? 'bg-red-500' : 'bg-green-500';
   };
 
-  const getPhaseColor = (p: CollectionPhase) => {
+  const getPhaseColour = (p: CollectionPhase) => {
     switch (p) {
       case 'baseline': return 'bg-blue-500';
       case 'task': return 'bg-purple-500';
@@ -373,10 +378,10 @@ const DataCollection: React.FC = () => {
                     <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                     <span className="text-sm">Recording</span>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${getPhaseColor(phase)}`}>
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${getPhaseColour(phase)}`}>
                     {phase.toUpperCase()}
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${getLabelColor(currentLabel)}`}>
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${getLabelColour(currentLabel)}`}>
                     Label: {currentLabel.toUpperCase()}
                   </div>
                 </>

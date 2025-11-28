@@ -29,7 +29,8 @@ const ActiveSession: React.FC = () => {
   const [totalBlinkCount, setTotalBlinkCount] = useState<number>(0);
   const [showFeaturePanel, setShowFeaturePanel] = useState<boolean>(true);
 
-  // Window buffer for collecting frame features
+  // WindowBuffer is a ring buffer that stores frames for the 10-second window ***
+  // useRef with initial value creates the buffer once on component mount ***
   const windowBufferRef = useRef<WindowBuffer>(
     new WindowBuffer(
       FEATURE_CONFIG.windows.length_s,
@@ -37,14 +38,16 @@ const ActiveSession: React.FC = () => {
     )
   );
 
-  // Refs to hold current values for use in callbacks (avoids stale closure issues)
+  // REF SYNC PATTERN: Refs mirror state values for use in callbacks ***
+  // Problem: useCallback captures stale state values from when it was created ***
+  // Solution: Keep refs in sync with state, read refs in callbacks ***
   const currentLoadRef = useRef(currentLoad);
   const sessionTimeRef = useRef(sessionTime);
   const showInterventionRef = useRef(showIntervention);
   const lastPredictionTimeRef = useRef(lastPredictionTime);
   const isPausedRef = useRef(isPaused);
 
-  // Keep refs in sync with state
+  // These effects update refs whenever state changes - refs always have current value ***
   useEffect(() => { currentLoadRef.current = currentLoad; }, [currentLoad]);
   useEffect(() => { sessionTimeRef.current = sessionTime; }, [sessionTime]);
   useEffect(() => { showInterventionRef.current = showIntervention; }, [showIntervention]);
@@ -73,7 +76,9 @@ const ActiveSession: React.FC = () => {
     }
   }, [isPaused]);
 
-  // Make prediction from current window (uses refs to avoid stale closures)
+  // ASYNC PREDICTION: Sends window features to backend, applies EWMA smoothing ***
+  // Empty dependency array [] means this callback is stable (never recreated) ***
+  // Uses refs inside to access current values without recreating the function ***
   const makePrediction = useCallback(async () => {
     try {
       // Get window data
@@ -95,7 +100,8 @@ const ActiveSession: React.FC = () => {
       const result = await predictCognitiveLoad(windowFeatures);
 
       if (result.success) {
-        // Apply EWMA smoothing (use ref for current value)
+        // EWMA (Exponential Weighted Moving Average) smooths jittery predictions ***
+        // alpha=0.4: new prediction has 40% weight, history has 60% weight ***
         const alpha = FEATURE_CONFIG.realtime.smoothing_alpha;
         const smoothedLoad = alpha * result.cli + (1 - alpha) * currentLoadRef.current;
 
@@ -161,10 +167,13 @@ const ActiveSession: React.FC = () => {
     // Check if it's time to make a prediction
     const stepS = FEATURE_CONFIG.windows.step_s;
 
+    // RACE CONDITION FIX: Update ref BEFORE async call, not after ***
+    // Without this, multiple frames could trigger predictions before first completes ***
     if (windowBufferRef.current.isReady() && now - lastPredictionTimeRef.current >= stepS) {
-      makePrediction();
+      lastPredictionTimeRef.current = now;  // Optimistic update prevents race ***
+      makePrediction();  // Fire-and-forget async - no await needed ***
     }
-  }, [makePrediction]); // Only depends on makePrediction which is stable
+  }, [makePrediction]); // makePrediction is stable due to empty deps array ***
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);

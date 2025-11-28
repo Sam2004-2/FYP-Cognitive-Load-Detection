@@ -9,14 +9,15 @@ import { FEATURE_CONFIG } from '../config/featureConfig';
 import { LandmarkResult } from '../types/features';
 
 /**
- * MediaPipe FaceMesh manager class.
+ * MediaPipe FaceMesh manager class ***
  * 
- * Wraps MediaPipe FaceMesh for easier integration with React components.
+ * Encapsulates MediaPipe lifecycle: initialisation, processing, cleanup ***
+ * Class-based for stateful tracking of the FaceMesh instance ***
  */
 export class MediaPipeManager {
-  private faceMesh: FaceMesh | null = null;
-  private isInitialized: boolean = false;
-  private lastResults: Results | null = null;
+  private faceMesh: FaceMesh | null = null;    // The MediaPipe instance ***
+  private isInitialized: boolean = false;       // Guard against double-init ***
+  private lastResults: Results | null = null;   // Cached for getLastResult() ***
 
   /**
    * Initialize MediaPipe FaceMesh.
@@ -31,18 +32,20 @@ export class MediaPipeManager {
 
     console.log('Initializing MediaPipe FaceMesh...');
 
+    // locateFile tells MediaPipe where to find WASM/model files ***
+    // CDN hosting avoids bundling large binary files with the app ***
     this.faceMesh = new FaceMesh({
       locateFile: (file) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
       },
     });
 
-    // Configure FaceMesh
+    // Configure FaceMesh - these settings match Python backend expectations ***
     this.faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true, // Enable iris landmarks
-      minDetectionConfidence: FEATURE_CONFIG.quality.min_face_conf,
-      minTrackingConfidence: FEATURE_CONFIG.quality.min_face_conf,
+      maxNumFaces: 1,                                              // Single user ***
+      refineLandmarks: true,                                       // Enable 478 landmarks including iris ***
+      minDetectionConfidence: FEATURE_CONFIG.quality.min_face_conf, // 0.5 minimum ***
+      minTrackingConfidence: FEATURE_CONFIG.quality.min_face_conf,  // 0.5 minimum ***
     });
 
     // Set results callback
@@ -136,12 +139,14 @@ export class MediaPipeManager {
 }
 
 /**
- * Global singleton instance (optional - can also create instances per component).
+ * SINGLETON PATTERN: Global instance avoids reinitialising MediaPipe ***
+ * MediaPipe init is expensive (~1-2s) so we reuse the same instance ***
  */
 let globalInstance: MediaPipeManager | null = null;
 
 /**
- * Get or create global MediaPipe manager instance.
+ * Factory function returns existing instance or creates new one ***
+ * Lazy initialisation - only created when first requested ***
  */
 export function getMediaPipeManager(): MediaPipeManager {
   if (!globalInstance) {
