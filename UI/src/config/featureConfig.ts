@@ -4,12 +4,15 @@
  * Ported from Machine Learning/configs/default.yaml
  */
 
+// 'as const' makes all values readonly and preserves literal types ***
+// This prevents accidental modification and enables better type inference ***
 export const FEATURE_CONFIG = {
-  /** Windowing parameters */
+  /** Windowing parameters - must match Python backend config */
   windows: {
-    /** Window length in seconds */
+    /** Window length in seconds - time span for feature aggregation */
     length_s: 10.0,
-    /** Step size in seconds (window overlap = length - step) */
+    /** Step size (2.5s) means 75% overlap between consecutive windows ***
+     *  Higher overlap = smoother predictions but more compute */
     step_s: 2.5,
   },
 
@@ -56,33 +59,38 @@ export const FEATURE_CONFIG = {
   },
 } as const;
 
-/** MediaPipe FaceMesh landmark indices */
+/** MediaPipe FaceMesh landmark indices - ported from Python landmarks.py ***
+ *  MediaPipe provides 468 facial landmarks; these are the key eye-related ones ***
+ */
 export const LANDMARK_INDICES = {
-  /** Left eye landmarks (6 points) for EAR calculation */
+  /** 6 landmarks per eye arranged for EAR calculation: corners + top/bottom pairs ***
+   *  Order: [outer_corner, top1, top2, inner_corner, bottom1, bottom2] ***
+   */
   LEFT_EYE: [33, 160, 158, 133, 153, 144],
-  /** Right eye landmarks (6 points) for EAR calculation */
   RIGHT_EYE: [362, 385, 387, 263, 373, 380],
-  /** Left iris landmarks (4 points) */
+  /** Iris landmarks used with refineLandmarks: true option in MediaPipe ***  */
   LEFT_IRIS: [469, 470, 471, 472],
-  /** Right iris landmarks (4 points) */
   RIGHT_IRIS: [474, 475, 476, 477],
-  /** Eye corners */
+  /** Eye corners - useful for gaze direction estimation ***  */
   LEFT_EYE_INNER: 133,
   LEFT_EYE_OUTER: 33,
   RIGHT_EYE_INNER: 362,
   RIGHT_EYE_OUTER: 263,
 } as const;
 
-/** Feature names in the expected order (must match backend model) */
+/** Feature names in the EXACT order expected by the ML model ***
+ *  CRITICAL: This order must match feature_spec.json in the backend ***
+ *  Changing order will cause model to produce incorrect predictions ***
+ */
 export const FEATURE_NAMES = [
-  'blink_rate',
-  'blink_count',
-  'mean_blink_duration',
-  'ear_std',
-  'mean_brightness',
-  'std_brightness',
-  'perclos',
-  'mean_quality',
-  'valid_frame_ratio',
+  'blink_rate',          // Blinks per minute ***
+  'blink_count',         // Total blinks in window ***
+  'mean_blink_duration', // Average blink length in ms ***
+  'ear_std',             // Eye Aspect Ratio variability ***
+  'mean_brightness',     // Average face region brightness ***
+  'std_brightness',      // Brightness variability ***
+  'perclos',             // Percentage of Eye Closure (fatigue indicator) ***
+  'mean_quality',        // Average detection confidence ***
+  'valid_frame_ratio',   // Fraction of usable frames ***
 ] as const;
 

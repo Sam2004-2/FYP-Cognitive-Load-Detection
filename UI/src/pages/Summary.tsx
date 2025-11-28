@@ -4,11 +4,13 @@ import LoadChart from '../components/LoadChart';
 import NasaTLXForm from '../components/NasaTLXForm';
 import { SessionData, NASATLXScores } from '../types';
 
+// Post-session summary page - displays metrics and collects subjective ratings ***
 const Summary: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const location = useLocation();  // Access to route state passed during navigation ***
   
-  // Get session data from navigation state
+  // React Router passes state via navigate('/summary', { state: {...} }) ***
+  // Fallback to empty data if accessed directly without state ***
   const sessionData: SessionData = location.state || {
     duration: 0,
     loadHistory: [],

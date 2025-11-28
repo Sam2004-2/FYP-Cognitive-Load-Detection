@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Landing page component - handles camera permissions before session starts ***
 const SessionSetup: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigate();  // React Router hook for programmatic navigation ***
   const [cameraPermission, setCameraPermission] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
+  // Requests camera access using browser's getUserMedia API ***
+  // Immediately stops stream after permission granted - just testing access ***
   const requestCameraPermission = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((track) => track.stop());  // Release camera immediately ***
       setCameraPermission(true);
       setError('');
     } catch (err) {

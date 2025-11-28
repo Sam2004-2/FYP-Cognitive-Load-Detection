@@ -209,7 +209,7 @@ async def predict_cognitive_load(request: PredictionRequest):
 
     try:
         # Convert features to dict
-        features_dict = request.features.dict()
+        features_dict = request.features.model_dump()
 
         # Log received features
         logger.debug(f"Received features: {features_dict}")
@@ -278,7 +278,7 @@ async def save_training_data(request: TrainingDataRequest):
 
             # Data rows
             for sample in request.samples:
-                features_dict = sample.features.dict()
+                features_dict = sample.features.model_dump()
                 row = [
                     request.participant_id,
                     sample.timestamp,

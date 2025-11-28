@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import MemoryTask from './MemoryTask';
 import MathTask from './MathTask';
 
+// Literal union types restrict values to specific strings ***
+// Exported so child components (MathTask, MemoryTask) can import and use them ***
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type TaskType = 'memory' | 'math';
 
+// Optional callback prop using ? - allows parent to listen for task completion ***
+// Multiple params allow parent to track performance across task types and difficulties ***
 interface TaskPanelProps {
   onTaskComplete?: (correct: boolean, taskType: TaskType, difficulty: Difficulty) => void;
 }
@@ -18,6 +22,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ onTaskComplete }) => {
     streak: 0,
   });
 
+  // Functional state update pattern - uses previous state to compute new state ***
+  // The ?. optional chaining safely calls callback only if defined ***
+  // The ! non-null assertion tells TS we know selectedTask is not null here ***
   const handleTaskComplete = (correct: boolean) => {
     setStats(prev => ({
       totalAttempts: prev.totalAttempts + 1,
@@ -189,4 +196,5 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ onTaskComplete }) => {
 };
 
 export default TaskPanel;
+
 

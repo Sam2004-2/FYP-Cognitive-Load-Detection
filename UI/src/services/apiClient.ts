@@ -10,16 +10,17 @@ import { HealthStatus, ModelInfo, PredictionResult, WindowFeatures } from '../ty
 const API_BASE_URL = FEATURE_CONFIG.api.base_url;
 
 /**
- * Custom error class for API errors.
+ * Custom error class for API errors ***
+ * Extends built-in Error with additional metadata for better error handling ***
  */
 export class APIError extends Error {
   constructor(
     message: string,
-    public status?: number,
-    public details?: any
+    public status?: number,  // HTTP status code (e.g., 404, 500) ***
+    public details?: any     // Response body for debugging ***
   ) {
     super(message);
-    this.name = 'APIError';
+    this.name = 'APIError';  // Allows checking error type with instanceof ***
   }
 }
 
@@ -96,21 +97,23 @@ export async function getModelInfo(): Promise<ModelInfo> {
  * @param retries - Number of retries on failure (default: 2)
  * @returns Prediction result with CLI and confidence
  */
+// Main prediction API call with retry logic and NaN sanitisation ***
 export async function predictCognitiveLoad(
   features: WindowFeatures,
-  retries: number = 2
+  retries: number = 2  // Default 2 retries = 3 total attempts ***
 ): Promise<PredictionResult> {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      // Check for NaN values and replace with 0
+      // NaN/Infinity values break JSON serialisation - replace with 0 ***
+      // This can happen with insufficient valid frames in a window ***
       const cleanedFeatures = Object.fromEntries(
         Object.entries(features).map(([key, value]) => [
           key,
           isNaN(value) || !isFinite(value) ? 0 : value,
         ])
-      ) as WindowFeatures;
+      ) as WindowFeatures;  // Type assertion tells TS the result is WindowFeatures ***
 
       const response = await fetch(`${API_BASE_URL}/predict`, {
         method: 'POST',
@@ -141,7 +144,8 @@ export async function predictCognitiveLoad(
         throw error;
       }
 
-      // Wait before retrying (exponential backoff)
+      // EXPONENTIAL BACKOFF: 1s, 2s, 4s... capped at 5s ***
+      // Prevents hammering a struggling server while giving it time to recover ***
       if (attempt < retries) {
         const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
         console.warn(`Prediction failed (attempt ${attempt + 1}/${retries + 1}), retrying in ${delay}ms...`);

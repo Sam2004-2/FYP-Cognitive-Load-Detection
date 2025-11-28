@@ -4,10 +4,11 @@ import { extractFrameFeatures } from '../services/featureExtraction';
 import { FrameFeatures } from '../types/features';
 import { FEATURE_CONFIG } from '../config/featureConfig';
 
+// Props interface with optional callback for parent component communication ***
 interface WebcamFeedProps {
-  isActive: boolean;
-  onFrameFeatures?: (features: FrameFeatures) => void;
-  showOverlay?: boolean;
+  isActive: boolean;                                    // Controls camera on/off state ***
+  onFrameFeatures?: (features: FrameFeatures) => void;  // Callback to send features to parent ***
+  showOverlay?: boolean;                                // Toggle between video/canvas display ***
 }
 
 const WebcamFeed: React.FC<WebcamFeedProps> = ({ 
@@ -23,11 +24,13 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
   const [faceDetected, setFaceDetected] = useState<boolean>(false);
   const [fps, setFps] = useState<number>(0);
   
-  const mediaPipeRef = useRef<MediaPipeManager | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const lastFrameTimeRef = useRef<number>(0);
-  const frameCountRef = useRef<number>(0);
-  const fpsUpdateIntervalRef = useRef<number>(0);
+  // Refs persist across re-renders without causing re-renders when updated ***
+  const mediaPipeRef = useRef<MediaPipeManager | null>(null);   // MediaPipe instance ***
+  const animationFrameRef = useRef<number | null>(null);        // RAF handle for cleanup ***
+  const streamRef = useRef<MediaStream | null>(null);           // Camera stream for cleanup ***
+  const lastFrameTimeRef = useRef<number>(0);                   // FPS calculation tracking ***
+  const frameCountRef = useRef<number>(0);                      // Frame counter for FPS ***
+  const fpsUpdateIntervalRef = useRef<number>(0);               // Last FPS update time ***
 
   // Initialize MediaPipe
   useEffect(() => {
@@ -53,7 +56,8 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     };
   }, []);
 
-  // Process video frames
+  // useCallback memoises the function to prevent recreation on every render ***
+  // Empty deps array means function is stable - only created once ***
   const processFrame = useCallback(async () => {
     if (!isActive || !videoRef.current || !canvasRef.current || !mediaPipeRef.current) {
       return;
@@ -120,7 +124,24 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
 
   // Setup webcam
   useEffect(() => {
+    // Helper to properly cleanup camera resources - prevents memory leaks ***
+    // Must stop all tracks AND cancel animation frame to fully release camera ***
+    const stopCurrentStream = () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setStream(null);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+
     if (isActive) {
+      // Stop any existing stream BEFORE requesting new one (prevents leak on pause/resume)
+      stopCurrentStream();
+
       navigator.mediaDevices
         .getUserMedia({ 
           video: { 
@@ -130,6 +151,7 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
           } 
         })
         .then((mediaStream) => {
+          streamRef.current = mediaStream;
           setStream(mediaStream);
           if (videoRef.current) {
             videoRef.current.srcObject = mediaStream;
@@ -140,22 +162,14 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
           setError('Unable to access camera');
         });
     } else {
-      // Stop processing when inactive
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
+      // Stop stream and processing when inactive
+      stopCurrentStream();
     }
 
+    // Cleanup on unmount
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
+      stopCurrentStream();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
   // Start frame processing when video is ready

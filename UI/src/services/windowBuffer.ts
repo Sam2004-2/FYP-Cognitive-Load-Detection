@@ -8,11 +8,14 @@ import { FEATURE_CONFIG } from '../config/featureConfig';
 import { FrameFeatures } from '../types/features';
 
 /**
- * Validate window quality based on fraction of bad frames.
+ * Quality gate for predictions - rejects windows with too many invalid frames ***
  * 
- * @param frameFeatures - Array of per-frame features
- * @param maxBadRatio - Maximum allowed ratio of bad frames
- * @returns Tuple of [isValid, badRatio]
+ * Invalid frames occur when face detection fails (lighting, occlusion, etc.) ***
+ * Default threshold (5%) prevents unreliable predictions from poor data ***
+ * 
+ * @param frameFeatures - Array of per-frame features from buffer ***
+ * @param maxBadRatio - Maximum allowed invalid frame ratio (default 0.05) ***
+ * @returns Tuple [isValid, badRatio] - TypeScript tuple type ***
  */
 export function validateWindowQuality(
   frameFeatures: FrameFeatures[],
@@ -31,16 +34,18 @@ export function validateWindowQuality(
 }
 
 /**
- * Ring buffer for real-time windowing.
+ * RING BUFFER DATA STRUCTURE for sliding window feature aggregation ***
  * 
- * Maintains a fixed-size buffer of recent frame features for real-time processing.
+ * Stores most recent N frames (e.g., 300 for 10s at 30fps) ***
+ * When full, new frames push out oldest (FIFO behaviour) ***
+ * Enables constant-memory real-time processing ***
  */
 export class WindowBuffer {
-  private windowLengthS: number;
-  private fps: number;
-  private maxFrames: number;
-  private buffer: FrameFeatures[];
-  private frameCount: number;
+  private windowLengthS: number;  // Window duration in seconds ***
+  private fps: number;            // Frames per second ***
+  private maxFrames: number;      // Capacity: windowLengthS * fps ***
+  private buffer: FrameFeatures[]; // The actual frame storage ***
+  private frameCount: number;      // Total frames ever added (for timing) ***
 
   /**
    * Initialize window buffer.
@@ -64,19 +69,19 @@ export class WindowBuffer {
   }
 
   /**
-   * Add frame features to buffer.
+   * Add frame to buffer - O(1) average, O(n) when shift occurs ***
    * 
    * @param frameFeatures - Per-frame feature object
    */
   addFrame(frameFeatures: FrameFeatures): void {
     this.buffer.push(frameFeatures);
 
-    // Remove oldest frame if buffer is full
+    // Ring buffer behaviour: remove oldest when at capacity ***
     if (this.buffer.length > this.maxFrames) {
-      this.buffer.shift();
+      this.buffer.shift();  // Note: shift() is O(n) but acceptable at ~300 frames ***
     }
 
-    this.frameCount++;
+    this.frameCount++;  // Running total for window timing calculations ***
   }
 
   /**
@@ -89,9 +94,10 @@ export class WindowBuffer {
   }
 
   /**
-   * Get current window of frame features.
+   * Get current window of frame features ***
    * 
-   * @returns Array of frame features for current window
+   * Returns COPY to prevent external mutation of internal buffer ***
+   * Spread operator [...] creates shallow copy (sufficient for immutable frames) ***
    */
   getWindow(): FrameFeatures[] {
     return [...this.buffer];
