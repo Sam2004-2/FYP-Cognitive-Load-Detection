@@ -1,11 +1,11 @@
 {
-  "training_date": "2025-11-22T01:51:53.823857",
+  "training_date": "2025-11-30T15:47:15.844010",
   "config_hash": "134358b54a6d033efde218a4c910c49a",
   "model_type": "logreg",
   "calibration_method": "platt",
-  "n_train_samples": 120,
-  "n_test_samples": 80,
-  "train_accuracy": 1.0,
+  "n_train_samples": 284,
+  "n_test_samples": 72,
+  "train_accuracy": 0.647887323943662,
   "feature_names": [
     "blink_rate",
     "blink_count",
