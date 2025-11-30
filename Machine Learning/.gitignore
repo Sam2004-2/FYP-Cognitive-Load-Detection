@@ -35,6 +35,9 @@ data/colet/*.mat
 # Models
 models/*.bin
 models/*.pkl
+# Allow essential model artifacts
+!models/model.bin
+!models/scaler.bin
 
 # Logs
 logs/*.log
