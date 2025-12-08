@@ -67,8 +67,8 @@ class Config:
         Raises:
             ValueError: If configuration is invalid
         """
-        # Check required top-level keys
-        required_keys = ["seed", "windows", "quality", "blink", "tepr", "features_enabled", "model"]
+        # Check required top-level keys (tepr removed - feature disabled)
+        required_keys = ["seed", "windows", "quality", "blink", "features_enabled"]
         for key in required_keys:
             if key not in self._config:
                 raise ValueError(f"Missing required config key: {key}")

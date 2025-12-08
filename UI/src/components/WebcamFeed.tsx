@@ -122,10 +122,9 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     animationFrameRef.current = requestAnimationFrame(processFrame);
   }, [isActive, onFrameFeatures]);
 
-  // Setup webcam
+  // Setup webcam with useEffect to only render when active***
   useEffect(() => {
-    // Helper to properly cleanup camera resources - prevents memory leaks ***
-    // Must stop all tracks AND cancel animation frame to fully release camera ***
+    // complicated to stop the stream and release cam ***
     const stopCurrentStream = () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());

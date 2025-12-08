@@ -40,9 +40,7 @@ coverage.xml
 *~
 .DS_Store
 
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
+
 
 # Data
 *.csv
@@ -87,3 +85,5 @@ ui/.env.production.local
 *.temp
 .cache/
 
+#Ignore Videos Folder
+Videos/
