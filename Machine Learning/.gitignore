@@ -20,8 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Jupyter Notebook
-.ipynb_checkpoints
+
 
 # macOS
 .DS_Store
@@ -61,3 +60,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+#Ignore certain models
+models/regression/
+models/regression_rf/
