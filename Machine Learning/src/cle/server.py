@@ -136,7 +136,7 @@ async def startup_event():
         sys.exit(1)
 
     # Load model artifacts from default models directory
-    models_dir = Path("models")
+    models_dir = Path("models/stress_classifier_rf")
     if not models_dir.exists():
         logger.error(f"Models directory not found: {models_dir}")
         sys.exit(1)
