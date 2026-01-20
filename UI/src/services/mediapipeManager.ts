@@ -137,31 +137,3 @@ export class MediaPipeManager {
     console.log('MediaPipe FaceMesh closed');
   }
 }
-
-/**
- * SINGLETON PATTERN: Global instance avoids reinitialising MediaPipe ***
- * MediaPipe init is expensive (~1-2s) so we reuse the same instance ***
- */
-let globalInstance: MediaPipeManager | null = null;
-
-/**
- * Factory function returns existing instance or creates new one ***
- * Lazy initialisation - only created when first requested ***
- */
-export function getMediaPipeManager(): MediaPipeManager {
-  if (!globalInstance) {
-    globalInstance = new MediaPipeManager();
-  }
-  return globalInstance;
-}
-
-/**
- * Clean up global MediaPipe manager instance.
- */
-export function cleanupMediaPipeManager(): void {
-  if (globalInstance) {
-    globalInstance.close();
-    globalInstance = null;
-  }
-}
-
