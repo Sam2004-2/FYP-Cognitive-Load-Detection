@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
@@ -151,6 +151,18 @@ def create_model(config: dict):
         )
         logger.info(f"Created GradientBoostingClassifier model with params: {params}")
 
+    elif model_type == "rf":
+        params = config.get("model.rf_params", {})
+        model = RandomForestClassifier(
+            n_estimators=params.get("n_estimators", 100),
+            max_depth=params.get("max_depth", 10),
+            min_samples_leaf=params.get("min_samples_leaf", 5),
+            n_jobs=params.get("n_jobs", -1),
+            class_weight="balanced",
+            random_state=config.get("seed", 42),
+        )
+        logger.info(f"Created RandomForestClassifier model with params: {params}")
+
     else:
         raise ValueError(f"Unknown model type: {model_type}")
 
@@ -186,6 +198,13 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level",
     )
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        default=None,
+        choices=["logreg", "gbt", "rf"],
+        help="Model type to train (overrides config)",
+    )
 
     args = parser.parse_args()
 
@@ -197,6 +216,14 @@ def main():
 
     # Load configuration
     config = load_config(args.config)
+    
+    # Override model type if specified via CLI
+    if args.model_type:
+        if "model" not in config._config:
+            config._config["model"] = {}
+        config._config["model"]["type"] = args.model_type
+        logger.info(f"Overriding model type from CLI: {args.model_type}")
+        
     logger.info(f"Loaded configuration (hash: {config.hash()[:8]})")
 
     # Set random seed
@@ -211,7 +238,7 @@ def main():
 
     # Prepare data
     X_train, X_test, y_train, y_test, train_idx, test_idx = prepare_data(
-        features_df, feature_names, config.to_dict()
+        features_df, feature_names, config
     )
 
     # Warn about small sample sizes
@@ -237,7 +264,7 @@ def main():
     X_test_scaled = scaler.transform(X_test)
 
     # Create model
-    base_model = create_model(config.to_dict())
+    base_model = create_model(config)
 
     # Train base model
     logger.info("Training base model...")
