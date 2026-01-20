@@ -1,0 +1,74 @@
+# AVCAffe Continuous Cognitive Load Regression Configuration
+#
+# Training configuration for predicting continuous mental demand scores [0,1]
+# from AVCAffe dataset eye-tracking features.
+#
+# This config extends default.yaml - common settings are inherited.
+
+# Task mode: regression for continuous [0,1] predictions
+task_mode: "regression"
+
+# Dataset configuration
+data:
+  input_file: "data/processed/avcaffe_labeled_features.csv"
+  label_column: "cognitive_load"  # Normalized mental demand [0,1]
+
+# Regression model configuration
+regression:
+  model_type: "xgb"  # GradientBoostingRegressor
+
+  # XGBoost/GradientBoosting parameters
+  xgb_params:
+    n_estimators: 200    # More trees for better performance
+    max_depth: 4         # Prevent overfitting
+    learning_rate: 0.05  # Smaller learning rate for stability
+    min_samples_leaf: 5  # Minimum samples per leaf
+
+  # Alternative: Ridge regression (faster, linear baseline)
+  ridge_params:
+    alpha: 1.0
+
+  # Alternative: Random Forest (if needed)
+  rf_params:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_leaf: 5
+    n_jobs: -1
+
+# Cross-validation configuration
+cv:
+  method: "group_kfold"  # Group by participant to prevent leakage
+  n_splits: 5            # 5-fold CV
+
+# Session-level aggregation (optional)
+session_agg:
+  method: "mean"  # Average window predictions per task
+
+# Features to use (from extract_video_features.py)
+features:
+  - blink_count
+  - blink_rate
+  - ear_std
+  - mean_blink_duration
+  - mean_brightness
+  - mean_quality
+  - perclos
+  - std_brightness
+  - valid_frame_ratio
+
+# Quality filtering thresholds
+quality:
+  min_valid_frame_ratio: 0.80  # At least 80% valid frames
+  min_mean_quality: 0.85       # At least 85% detection quality
+
+# Evaluation metrics
+eval:
+  metrics: ["mae", "rmse", "r2", "spearman"]
+
+# Random seed for reproducibility
+seed: 42
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
