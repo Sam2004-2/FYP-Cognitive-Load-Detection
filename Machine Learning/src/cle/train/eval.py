@@ -37,6 +37,7 @@ def evaluate_model(
     scaler,
     X_test: np.ndarray,
     y_test: np.ndarray,
+    threshold: float = 0.5,
 ) -> dict:
     """
     Evaluate model performance.
@@ -46,6 +47,7 @@ def evaluate_model(
         scaler: Fitted scaler
         X_test: Test features
         y_test: Test labels
+        threshold: Decision threshold
 
     Returns:
         Dictionary with evaluation metrics
@@ -54,8 +56,8 @@ def evaluate_model(
     X_test_scaled = scaler.transform(X_test)
 
     # Predictions
-    y_pred = model.predict(X_test_scaled)
     y_proba = model.predict_proba(X_test_scaled)[:, 1]
+    y_pred = (y_proba >= threshold).astype(int)
 
     # Compute metrics
     acc = accuracy_score(y_test, y_pred)
@@ -118,6 +120,12 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level",
     )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Decision threshold for classification (default: 0.5)",
+    )
 
     args = parser.parse_args()
 
@@ -178,9 +186,10 @@ def main():
         X_test = np.nan_to_num(X_test, nan=0.0)
 
     logger.info(f"Test set: {len(X_test)} samples (low={np.sum(y_test==0)}, high={np.sum(y_test==1)})")
+    logger.info(f"Using decision threshold: {args.threshold}")
 
     # Evaluate model
-    metrics = evaluate_model(model, scaler, X_test, y_test)
+    metrics = evaluate_model(model, scaler, X_test, y_test, threshold=args.threshold)
 
     # Create evaluation report
     report = {

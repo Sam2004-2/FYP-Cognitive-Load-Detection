@@ -1,5 +1,5 @@
 /**
- * Feature extraction utilities.
+ * Fature extraction utilities.
  * 
  * Converted from Pythonr to typscript 
  */
