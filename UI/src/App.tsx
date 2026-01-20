@@ -14,7 +14,6 @@ function App() {
         <Route path="/session" element={<ActiveSession />} />
         <Route path="/summary" element={<Summary />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/history" element={<Summary />} />
         <Route path="/collect" element={<DataCollection />} />
       </Routes>
     </Router>

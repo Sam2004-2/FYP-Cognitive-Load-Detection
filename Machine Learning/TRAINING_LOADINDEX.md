@@ -20,7 +20,7 @@ Where:
 - `relax`: Self-reported relaxation level (0-10 scale, inverted)
 - Result: Higher cognitive load when stress is high AND relaxation is low
 
-The pre-computed values are in `self_assessments_loadindex.csv`.
+The pre-computed values are in `data/raw/assessments/self_assessments_loadindex.csv`.
 
 ## Data Join Process
 
@@ -94,27 +94,27 @@ cd "Machine Learning"
 # Basic training (Ridge regression, 5-fold GroupKFold)
 python -m src.cle.train.train_regression \
     --in data/processed/stressid_features.csv \
-    --load-index self_assessments_loadindex.csv \
+    --load-index data/raw/assessments/self_assessments_loadindex.csv \
     --out models/regression/
 
 # With different model type
 python -m src.cle.train.train_regression \
     --in data/processed/stressid_features.csv \
-    --load-index self_assessments_loadindex.csv \
+    --load-index data/raw/assessments/self_assessments_loadindex.csv \
     --out models/regression/ \
     --model-type rf  # or "xgb"
 
 # With Leave-One-Subject-Out CV
 python -m src.cle.train.train_regression \
     --in data/processed/stressid_features.csv \
-    --load-index self_assessments_loadindex.csv \
+    --load-index data/raw/assessments/self_assessments_loadindex.csv \
     --out models/regression/ \
     --loso
 
 # Custom config
 python -m src.cle.train.train_regression \
     --in data/processed/stressid_features.csv \
-    --load-index self_assessments_loadindex.csv \
+    --load-index data/raw/assessments/self_assessments_loadindex.csv \
     --out models/regression/ \
     --config configs/regression.yaml
 ```
@@ -124,7 +124,7 @@ python -m src.cle.train.train_regression \
 ```bash
 python -m src.cle.train.eval_regression \
     --in data/processed/stressid_features.csv \
-    --load-index self_assessments_loadindex.csv \
+    --load-index data/raw/assessments/self_assessments_loadindex.csv \
     --models models/regression/ \
     --report reports/regression_eval.json
 ```
