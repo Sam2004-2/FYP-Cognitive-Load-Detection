@@ -57,6 +57,9 @@ models/*.joblib
 models/*.pkl
 !models/feature_spec.json
 
+# Archived models (not pushed to repo)
+Machine Learning/models/archive/
+
 # Logs and Reports
 *.log
 logs/
