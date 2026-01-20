@@ -51,6 +51,7 @@ data/
 data/raw/videos/
 data/processed/
 !data/raw/manifest.csv
+Dataset/AVCAffe
 
 # Models
 models/*.joblib
