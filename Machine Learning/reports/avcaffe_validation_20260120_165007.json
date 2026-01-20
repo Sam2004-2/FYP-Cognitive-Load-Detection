@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-01-20T16:50:07.748658",
+  "total_windows": 132862,
+  "feature_coverage": {
+    "unique_participants": 106,
+    "unique_tasks": 9,
+    "unique_participant_tasks": 950,
+    "windows_per_participant_task_mean": 139.85473684210527,
+    "windows_per_participant_task_std": 68.23544401944864
+  },
+  "label_coverage": {
+    "labeled_windows": 132862,
+    "unlabeled_windows": 0,
+    "coverage_percentage": 100.0
+  },
+  "label_distribution": {
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.4731726653720903,
+    "std": 0.27873211089671973,
+    "quartiles": [
+      0.1904761904761904,
+      0.5238095238095238,
+      0.7142857142857143
+    ]
+  },
+  "feature_quality": {
+    "mean_quality_avg": 0.9000000000000005,
+    "mean_quality_std": 2.2098568638948378e-16,
+    "valid_frame_ratio_avg": 0.9920645009026109,
+    "valid_frame_ratio_std": 0.05300383534435018,
+    "features_with_nan": {
+      "blink_count": 99,
+      "blink_rate": 99,
+      "ear_std": 99,
+      "mean_blink_duration": 99,
+      "mean_brightness": 99,
+      "mean_quality": 99,
+      "perclos": 99,
+      "std_brightness": 99,
+      "valid_frame_ratio": 99
+    }
+  },
+  "consistency": {
+    "duplicates": 0,
+    "time_range_errors": 0,
+    "frame_range_errors": 0
+  },
+  "status": "FAIL",
+  "issues": [
+    "9 features with NaN values"
+  ]
+}
