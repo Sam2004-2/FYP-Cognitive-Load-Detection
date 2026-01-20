@@ -1,7 +1,7 @@
 /**
- * Fature extraction utilities.
- * 
- * Converted from Pythonr to typscript 
+ * Feature extraction utilities.
+ *
+ * Converted from Python to TypeScript.
  */
 
 import { FEATURE_CONFIG, LANDMARK_INDICES } from '../config/featureConfig';

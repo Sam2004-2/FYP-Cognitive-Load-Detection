@@ -1,38 +1,11 @@
 # Cognitive Load Estimation - Regression Configuration
 # For training continuous load_0_1 target from StressID self-assessments
-
-# Inherit base settings from default.yaml where applicable
-
-# Random seed for reproducibility
-seed: 42
-
-# Fallback FPS if video metadata is unavailable
-fps_fallback: 30.0
+#
+# This config extends default.yaml - only regression-specific settings are defined here.
+# Common settings (windows, quality, blink, paths, logging) are inherited from default.yaml.
 
 # Task mode: "classification" or "regression"
 task_mode: "regression"
-
-# Windowing parameters (same as default)
-windows:
-  length_s: 10.0
-  step_s: 2.5
-
-# Quality control thresholds (same as default)
-quality:
-  min_face_conf: 0.5
-  max_bad_frame_ratio: 0.05
-
-# Blink detection parameters (same as default)
-blink:
-  ear_thresh: 0.21
-  min_blink_ms: 120
-  max_blink_ms: 400
-
-# Feature flags
-features_enabled:
-  blinks: true
-  perclos: true
-  brightness: true
 
 # Regression model configuration
 regression:
@@ -72,23 +45,8 @@ tasks:
   - "Counting2"
   - "Speaking"
 
-# Evaluation configuration
+# Evaluation configuration (overrides default)
 eval:
   metrics: ["mae", "rmse", "spearman", "r2"]
   report_window_level: true   # Also report window-level metrics (for debugging)
   report_session_level: true  # Primary evaluation level
-
-# Paths (relative to project root)
-paths:
-  raw_dir: "data/raw"
-  interim_dir: "data/interim"
-  processed_dir: "data/processed"
-  models_dir: "models"
-  reports_dir: "reports"
-
-# Logging configuration
-logging:
-  level: "INFO"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  save_logs: true
-  log_dir: "logs"
