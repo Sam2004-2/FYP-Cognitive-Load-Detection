@@ -1,0 +1,25 @@
+{
+  "features": [
+    "blink_rate",
+    "blink_count",
+    "mean_blink_duration",
+    "ear_std",
+    "mean_brightness",
+    "std_brightness",
+    "perclos",
+    "mean_quality",
+    "valid_frame_ratio"
+  ],
+  "n_features": 9,
+  "task_mode": "classification",
+  "classes": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "class_thresholds": [
+    0.33,
+    0.66
+  ],
+  "n_classes": 3
+}

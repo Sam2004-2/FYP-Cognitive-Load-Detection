@@ -61,6 +61,9 @@ models/*.pkl
 # Archived models (not pushed to repo)
 Machine Learning/models/archive/
 
+# Large model files (exceeds GitHub 100MB limit)
+Machine Learning/models/avcaffe_classification_improved/
+
 # Logs and Reports
 *.log
 logs/
