@@ -50,8 +50,10 @@ class PredictionRequest(BaseModel):
 class PredictionResponse(BaseModel):
     """Response with cognitive load prediction."""
 
-    cli: float = Field(..., description="Cognitive Load Index (0-1)")
+    level: str = Field(..., description="Cognitive load level: HIGH or LOW")
     confidence: float = Field(..., description="Prediction confidence (0-1)")
+    trend: str = Field(..., description="Load trend: INCREASING, DECREASING, STABLE, or INSUFFICIENT_DATA")
+    raw_score: float = Field(..., description="Raw prediction score (0-1)")
     success: bool = Field(..., description="Whether prediction succeeded")
     message: Optional[str] = Field(None, description="Optional message")
 
@@ -69,7 +71,8 @@ class ModelInfoResponse(BaseModel):
 
     features: List[str]
     n_features: int
-    calibration: Dict
+    task_mode: str
+    classes: List[str]
 
 
 class TrainingSample(BaseModel):
@@ -136,15 +139,24 @@ async def startup_event():
         sys.exit(1)
 
     # Load model artifacts from default models directory
-    models_dir = Path("models/stress_classifier_rf")
+    models_dir = Path("models/binary_classifier")
+    if not models_dir.exists():
+        # Fallback to old model if binary classifier not trained yet
+        models_dir = Path("models/stress_classifier_rf")
+
     if not models_dir.exists():
         logger.error(f"Models directory not found: {models_dir}")
+        logger.error("Run train_binary.py to train the model first")
         sys.exit(1)
 
     try:
         artifacts = load_model(str(models_dir))
         logger.info(f"Loaded model artifacts with {len(artifacts['feature_spec']['features'])} features")
         logger.info(f"Features: {', '.join(artifacts['feature_spec']['features'])}")
+
+        # Initialize trend detector
+        from src.cle.api import init_trend_detector
+        init_trend_detector(window=5, threshold=0.1)
     except Exception as e:
         logger.error(f"Failed to load model artifacts: {e}")
         sys.exit(1)
@@ -158,13 +170,23 @@ async def root():
     """Root endpoint."""
     return {
         "service": "Cognitive Load Estimation API",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "description": "Binary classification (HIGH/LOW) with trend detection",
         "endpoints": {
-            "POST /predict": "Make cognitive load prediction",
+            "POST /predict": "Make cognitive load prediction (returns level, confidence, trend)",
+            "POST /reset-trend": "Reset trend detector state",
             "GET /health": "Health check",
             "GET /model-info": "Model information",
         },
     }
+
+
+@app.post("/reset-trend")
+async def reset_trend():
+    """Reset the trend detector state."""
+    from src.cle.api import reset_trend_detector
+    reset_trend_detector()
+    return {"success": True, "message": "Trend detector reset"}
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -186,10 +208,12 @@ async def get_model_info():
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
+    feature_spec = artifacts["feature_spec"]
     return ModelInfoResponse(
-        features=artifacts["feature_spec"]["features"],
-        n_features=artifacts["feature_spec"]["n_features"],
-        calibration=artifacts["calibration"],
+        features=feature_spec["features"],
+        n_features=feature_spec.get("n_features", len(feature_spec["features"])),
+        task_mode=feature_spec.get("task_mode", "binary_classification"),
+        classes=feature_spec.get("classes", ["LOW", "HIGH"]),
     )
 
 
@@ -202,7 +226,7 @@ async def predict_cognitive_load(request: PredictionRequest):
         request: Window features
 
     Returns:
-        Cognitive Load Index and confidence
+        Binary classification (HIGH/LOW) with confidence and trend
     """
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
@@ -214,14 +238,21 @@ async def predict_cognitive_load(request: PredictionRequest):
         # Log received features
         logger.debug(f"Received features: {features_dict}")
 
-        # Make prediction
-        cli, confidence = predict_window(features_dict, artifacts)
+        # Make prediction (returns dict with level, confidence, trend, raw_score)
+        result = predict_window(features_dict, artifacts)
 
-        logger.info(f"Prediction: CLI={cli:.3f}, confidence={confidence:.3f}")
+        logger.info(
+            f"Prediction: {result['level']} "
+            f"(confidence={result['confidence']:.3f}, "
+            f"trend={result['trend']}, "
+            f"raw={result['raw_score']:.3f})"
+        )
 
         return PredictionResponse(
-            cli=cli,
-            confidence=confidence,
+            level=result["level"],
+            confidence=result["confidence"],
+            trend=result["trend"],
+            raw_score=result["raw_score"],
             success=True,
             message=None,
         )

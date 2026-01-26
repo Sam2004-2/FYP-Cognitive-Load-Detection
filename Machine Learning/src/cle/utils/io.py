@@ -146,6 +146,10 @@ def load_features_csv(features_path: str) -> pd.DataFrame:
     """
     Load features CSV.
 
+    Automatically adapts AVCAffe schema to expected training format:
+    - 'participant_id' -> 'user_id'
+    - 'cognitive_load' -> 'load_0_1'
+
     Args:
         features_path: Path to features CSV file
 
@@ -161,6 +165,18 @@ def load_features_csv(features_path: str) -> pd.DataFrame:
 
     df = pd.read_csv(features_path)
     logger.info(f"Loaded {len(df)} feature rows from {features_path.name}")
+    
+    # Adapt AVCAffe schema if detected
+    rename_map = {}
+    if "participant_id" in df.columns and "user_id" not in df.columns:
+        rename_map["participant_id"] = "user_id"
+    if "cognitive_load" in df.columns and "load_0_1" not in df.columns:
+        rename_map["cognitive_load"] = "load_0_1"
+    
+    if rename_map:
+        df = df.rename(columns=rename_map)
+        logger.info(f"Adapted AVCAffe schema: {rename_map}")
+    
     return df
 
 

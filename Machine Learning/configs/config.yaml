@@ -1,0 +1,83 @@
+# Cognitive Load Detection - Simplified Configuration
+# Binary classification (HIGH/LOW) with trend detection
+
+# =============================================================================
+# Data Paths
+# =============================================================================
+data:
+  features_path: "data/avcaffe_features_final.csv"
+  labels_path: "data/avcaffe_labels.csv"
+
+# =============================================================================
+# Feature Configuration
+# =============================================================================
+# 9 base features - no derived features for simplicity
+features:
+  - blink_rate
+  - blink_count
+  - mean_blink_duration
+  - ear_std
+  - perclos
+  - mean_brightness
+  - std_brightness
+  - mean_quality
+  - valid_frame_ratio
+
+features_enabled:
+  blinks: true
+  brightness: true
+  perclos: true
+
+# Blink detection parameters
+blink:
+  ear_thresh: 0.21
+  min_blink_ms: 120
+  max_blink_ms: 400
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  type: xgboost  # GradientBoostingClassifier
+  params:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+training:
+  cv_folds: 5
+  cv_method: group_kfold  # Subject-wise cross-validation
+  group_column: user_id
+  seed: 42
+
+# =============================================================================
+# Classification Thresholds
+# =============================================================================
+threshold:
+  binary: 0.5  # >= 0.5 is HIGH, < 0.5 is LOW
+
+# =============================================================================
+# Trend Detection
+# =============================================================================
+trend:
+  window: 5           # Compare last 5 vs previous 5 predictions
+  threshold: 0.1      # 10% change required to detect trend
+  max_history: 100    # Maximum predictions to keep in buffer
+
+# =============================================================================
+# Window Configuration (for feature extraction)
+# =============================================================================
+window:
+  length_s: 10.0      # 10-second windows
+  step_s: 2.5         # 2.5-second step (75% overlap)
+  min_valid_ratio: 0.5
+
+# =============================================================================
+# Output Paths
+# =============================================================================
+output:
+  model_path: "models/binary_classifier"
+  log_dir: "logs"
