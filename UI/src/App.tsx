@@ -5,6 +5,8 @@ import ActiveSession from './pages/ActiveSession';
 import Summary from './pages/Summary';
 import Settings from './pages/Settings';
 import DataCollection from './pages/DataCollection';
+import PilotStudy from './pages/PilotStudy';
+import DelayedTest from './pages/DelayedTest';
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
         <Route path="/summary" element={<Summary />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/collect" element={<DataCollection />} />
+        <Route path="/pilot" element={<PilotStudy />} />
+        <Route path="/study/delayed/:sessionId" element={<DelayedTest />} />
       </Routes>
     </Router>
   );
