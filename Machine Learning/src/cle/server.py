@@ -104,6 +104,82 @@ class TrainingDataResponse(BaseModel):
     message: Optional[str] = None
 
 
+# ============================================================================
+# Pilot Study Models
+# ============================================================================
+
+class CalibrationData(BaseModel):
+    """Calibration baseline data."""
+    baseline_cli: float = Field(..., description="Mean CLI during calibration")
+    baseline_ear: float = Field(..., description="Mean EAR during calibration")
+    duration_s: float = Field(..., description="Calibration duration in seconds")
+
+
+class CLIDataPoint(BaseModel):
+    """Single CLI measurement."""
+    t: float = Field(..., description="Time in seconds from session start")
+    cli: float = Field(..., description="Cognitive Load Index (0-1)")
+    confidence: float = Field(..., description="Prediction confidence")
+
+
+class InterventionLog(BaseModel):
+    """Log of a triggered intervention."""
+    t: float = Field(..., description="Time in seconds from session start")
+    cli: float = Field(..., description="CLI at trigger")
+    type: str = Field(..., description="Intervention type: micro_break, pacing_adjustment")
+    accepted: bool = Field(..., description="Whether user accepted the intervention")
+
+
+class TaskPerformance(BaseModel):
+    """Performance on a task block."""
+    correct: int
+    total: int
+    rt_mean_ms: Optional[float] = None
+    responses: Optional[List[Dict]] = None
+
+
+class NASATLXData(BaseModel):
+    """NASA-TLX scores."""
+    mental: int
+    physical: int
+    temporal: int
+    performance: int
+    effort: int
+    frustration: int
+    raw_tlx: float = Field(..., description="Unweighted average")
+
+
+class StudySession(BaseModel):
+    """Complete pilot study session data."""
+    participant_id: str
+    session_number: int = Field(..., description="1 or 2")
+    condition: str = Field(..., description="adaptive or baseline")
+    timestamp: str = Field(..., description="ISO format timestamp")
+    form_version: str = Field(default="A", description="Word pair form: A or B")
+    calibration: CalibrationData
+    cli_timeseries: List[CLIDataPoint]
+    interventions: List[InterventionLog]
+    task_performance: Dict[str, TaskPerformance]
+    nasa_tlx: NASATLXData
+    immediate_test: TaskPerformance
+    delayed_test: Optional[TaskPerformance] = None
+
+
+class StudySessionResponse(BaseModel):
+    """Response after saving study session."""
+    success: bool
+    session_id: str
+    filename: str
+    message: Optional[str] = None
+
+
+class DelayedTestResult(BaseModel):
+    """Delayed test results to append to session."""
+    session_id: str
+    test_date: str
+    performance: TaskPerformance
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Cognitive Load Estimation API",
@@ -429,6 +505,153 @@ async def save_training_data(request: TrainingDataRequest):
     except Exception as e:
         logger.error(f"Failed to save training data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save data: {str(e)}")
+
+
+# ============================================================================
+# Pilot Study Endpoints
+# ============================================================================
+
+@app.post("/study/session", response_model=StudySessionResponse)
+async def save_study_session(session: StudySession):
+    """
+    Save a complete pilot study session.
+    
+    Saves all session data (CLI timeseries, interventions, task performance,
+    NASA-TLX scores) to a JSON file in data/pilot_sessions/.
+    """
+    import json
+    
+    # Create output directory
+    output_dir = Path("data/pilot_sessions")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate session ID and filename
+    session_id = f"{session.participant_id}_s{session.session_number}_{session.condition}"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{session_id}_{timestamp}.json"
+    filepath = output_dir / filename
+    
+    try:
+        # Save session data
+        session_dict = session.model_dump()
+        with open(filepath, "w") as f:
+            json.dump(session_dict, f, indent=2)
+        
+        logger.info(f"Saved pilot study session: {filename}")
+        
+        return StudySessionResponse(
+            success=True,
+            session_id=session_id,
+            filename=filename,
+            message=f"Session saved to {filepath}"
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to save study session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {str(e)}")
+
+
+@app.get("/study/session/{session_id}")
+async def get_study_session(session_id: str):
+    """
+    Retrieve a study session by ID for delayed testing.
+    
+    Searches for the session file matching the session_id prefix.
+    """
+    import json
+    
+    output_dir = Path("data/pilot_sessions")
+    
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="No pilot sessions found")
+    
+    # Find matching session file
+    matching_files = list(output_dir.glob(f"{session_id}_*.json"))
+    
+    if not matching_files:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    
+    # Use most recent if multiple matches
+    filepath = sorted(matching_files)[-1]
+    
+    try:
+        with open(filepath) as f:
+            session_data = json.load(f)
+        return session_data
+    
+    except Exception as e:
+        logger.error(f"Failed to load session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load session: {str(e)}")
+
+
+@app.post("/study/delayed-result")
+async def save_delayed_test_result(result: DelayedTestResult):
+    """
+    Save delayed test results and append to original session.
+    """
+    import json
+    
+    output_dir = Path("data/pilot_sessions")
+    
+    # Find the original session file
+    matching_files = list(output_dir.glob(f"{result.session_id}_*.json"))
+    
+    if not matching_files:
+        raise HTTPException(status_code=404, detail=f"Session not found: {result.session_id}")
+    
+    filepath = sorted(matching_files)[-1]
+    
+    try:
+        # Load existing session
+        with open(filepath) as f:
+            session_data = json.load(f)
+        
+        # Add delayed test results
+        session_data["delayed_test"] = result.performance.model_dump()
+        session_data["delayed_test_date"] = result.test_date
+        
+        # Save updated session
+        with open(filepath, "w") as f:
+            json.dump(session_data, f, indent=2)
+        
+        logger.info(f"Added delayed test results to session: {result.session_id}")
+        
+        return {"success": True, "message": "Delayed test results saved"}
+    
+    except Exception as e:
+        logger.error(f"Failed to save delayed test results: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save results: {str(e)}")
+
+
+@app.get("/study/sessions")
+async def list_study_sessions():
+    """
+    List all pilot study sessions.
+    """
+    import json
+    
+    output_dir = Path("data/pilot_sessions")
+    
+    if not output_dir.exists():
+        return {"sessions": []}
+    
+    sessions = []
+    for filepath in output_dir.glob("*.json"):
+        try:
+            with open(filepath) as f:
+                data = json.load(f)
+            sessions.append({
+                "filename": filepath.name,
+                "participant_id": data.get("participant_id"),
+                "session_number": data.get("session_number"),
+                "condition": data.get("condition"),
+                "timestamp": data.get("timestamp"),
+                "has_delayed_test": data.get("delayed_test") is not None
+            })
+        except Exception:
+            continue
+    
+    return {"sessions": sorted(sessions, key=lambda x: x.get("timestamp", ""), reverse=True)}
 
 
 def main():

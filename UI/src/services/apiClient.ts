@@ -286,3 +286,129 @@ export async function saveTrainingData(
   }
 }
 
+// ============================================================================
+// Pilot Study API Functions
+// ============================================================================
+
+import { StudySession, TaskPerformance } from '../types';
+
+export interface StudySessionResponse {
+  success: boolean;
+  session_id: string;
+  filename: string;
+  message?: string;
+}
+
+/**
+ * Save a complete pilot study session.
+ */
+export async function saveStudySession(session: StudySession): Promise<StudySessionResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/study/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(session),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new APIError(
+        `Failed to save study session: ${response.statusText}`,
+        response.status,
+        errorData
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      `Failed to save study session: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Get a study session by ID for delayed testing.
+ */
+export async function getStudySession(sessionId: string): Promise<StudySession> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/study/session/${sessionId}`);
+
+    if (!response.ok) {
+      throw new APIError(
+        `Session not found: ${sessionId}`,
+        response.status
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      `Failed to get study session: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Save delayed test results.
+ */
+export async function saveDelayedTestResult(
+  sessionId: string,
+  performance: TaskPerformance
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/study/delayed-result`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        test_date: new Date().toISOString(),
+        performance,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new APIError(
+        `Failed to save delayed test: ${response.statusText}`,
+        response.status
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      `Failed to save delayed test: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * List all pilot study sessions.
+ */
+export async function listStudySessions(): Promise<{
+  sessions: Array<{
+    filename: string;
+    participant_id: string;
+    session_number: number;
+    condition: string;
+    timestamp: string;
+    has_delayed_test: boolean;
+  }>;
+}> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/study/sessions`);
+    if (!response.ok) {
+      throw new APIError('Failed to list sessions', response.status);
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof APIError) throw error;
+    throw new APIError(
+      `Failed to list sessions: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
