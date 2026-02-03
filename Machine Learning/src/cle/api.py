@@ -3,6 +3,17 @@ Public API for CLE.
 
 High-level functions for loading models and making predictions.
 Supports binary classification (HIGH/LOW) with trend detection.
+
+Two usage patterns supported:
+
+1. Class-based (recommended):
+    predictor = CognitiveLoadPredictor("models/binary_classifier")
+    result = predictor.predict(features)
+
+2. Module-level functions (backward compatible):
+    artifacts = load_model("models/binary_classifier")
+    init_trend_detector()
+    result = predict_window(features, artifacts)
 """
 
 from pathlib import Path
@@ -12,12 +23,160 @@ import numpy as np
 
 from src.cle.extract.features import compute_window_features
 from src.cle.logging_setup import get_logger
-from src.cle.predict.trend import TrendDetector, Trend
-from src.cle.utils.io import load_json, load_model_artifact
+from src.cle.predict.trend import Trend, TrendDetector
+from src.cle.utils.io import load_model_bundle
 
 logger = get_logger(__name__)
 
-# Global trend detector for stateful trend tracking
+
+class CognitiveLoadPredictor:
+    """
+    Cognitive load predictor with encapsulated state.
+
+    This class provides a thread-safe, testable interface for making
+    predictions with integrated trend detection.
+
+    Usage:
+        predictor = CognitiveLoadPredictor("models/binary_classifier")
+        result = predictor.predict(features)
+        predictor.reset_trend()  # Reset for new session
+    """
+
+    def __init__(
+        self,
+        models_dir: str,
+        trend_window: int = 5,
+        trend_threshold: float = 0.1,
+    ):
+        """
+        Initialize predictor with model artifacts.
+
+        Args:
+            models_dir: Directory containing model artifacts
+            trend_window: Number of predictions for trend calculation
+            trend_threshold: Minimum change to detect trend
+        """
+        self.artifacts = load_model_bundle(models_dir)
+        self.trend_detector = TrendDetector(
+            window=trend_window,
+            threshold=trend_threshold,
+        )
+        self._models_dir = models_dir
+
+        logger.info(
+            f"Initialized CognitiveLoadPredictor from {models_dir} "
+            f"({len(self.artifacts['feature_spec']['features'])} features)"
+        )
+
+    @property
+    def feature_names(self) -> List[str]:
+        """Get the list of feature names expected by the model."""
+        return self.artifacts["feature_spec"]["features"]
+
+    def predict(
+        self,
+        features: Union[Dict, np.ndarray, List],
+        update_trend: bool = True,
+    ) -> Dict:
+        """
+        Predict cognitive load for a window of features.
+
+        Args:
+            features: Window features as dict, array, or list
+            update_trend: Whether to update trend detector
+
+        Returns:
+            Dictionary with level, confidence, trend, raw_score
+        """
+        feature_array = self._prepare_features(features)
+
+        # Handle NaN values
+        if np.any(np.isnan(feature_array)):
+            imputer = self.artifacts.get("imputer")
+            if imputer is not None:
+                feature_array = imputer.transform(feature_array)
+            else:
+                logger.warning("Found NaN values in features, replacing with zeros")
+                feature_array = np.nan_to_num(feature_array, nan=0.0)
+
+        # Scale and predict
+        scaler = self.artifacts["scaler"]
+        model = self.artifacts["model"]
+
+        features_scaled = scaler.transform(feature_array)
+        proba = model.predict_proba(features_scaled)[0, 1]
+        raw_score = float(proba)
+
+        # Binary classification
+        level = "HIGH" if proba >= 0.5 else "LOW"
+        confidence = float(np.clip(abs(proba - 0.5) * 2.0, 0.0, 1.0))
+
+        # Trend detection
+        trend = Trend.INSUFFICIENT_DATA
+        if update_trend:
+            self.trend_detector.add(raw_score)
+            trend = self.trend_detector.get_trend()
+
+        return {
+            "level": level,
+            "confidence": confidence,
+            "trend": trend.value,
+            "raw_score": raw_score,
+        }
+
+    def predict_simple(
+        self,
+        features: Union[Dict, np.ndarray, List],
+    ) -> Tuple[str, float]:
+        """
+        Simple prediction without trend tracking.
+
+        Args:
+            features: Window features
+
+        Returns:
+            Tuple of (level, confidence)
+        """
+        result = self.predict(features, update_trend=False)
+        return result["level"], result["confidence"]
+
+    def reset_trend(self) -> None:
+        """Reset trend detector state (e.g., for new session)."""
+        self.trend_detector.reset()
+        logger.debug("Reset trend detector")
+
+    def _prepare_features(self, features: Union[Dict, np.ndarray, List]) -> np.ndarray:
+        """Convert features to 2D numpy array."""
+        feature_names = self.feature_names
+
+        if isinstance(features, dict):
+            feature_array = np.array([features.get(name, 0.0) for name in feature_names])
+        elif isinstance(features, (list, tuple)):
+            feature_array = np.array(features)
+        elif isinstance(features, np.ndarray):
+            feature_array = features
+        else:
+            raise ValueError(f"Unsupported feature type: {type(features)}")
+
+        # Validate shape
+        if feature_array.shape[-1] != len(feature_names):
+            raise ValueError(
+                f"Feature dimension mismatch: got {feature_array.shape[-1]}, "
+                f"expected {len(feature_names)}"
+            )
+
+        # Ensure 2D shape
+        if feature_array.ndim == 1:
+            feature_array = feature_array.reshape(1, -1)
+
+        return feature_array
+
+
+# ---------------------------------------------------------------------------
+# Module-level functions (backward compatible API)
+# ---------------------------------------------------------------------------
+
+# Global trend detector for stateful trend tracking (backward compatibility)
 _trend_detector: Optional[TrendDetector] = None
 
 
@@ -29,44 +188,12 @@ def load_model(models_dir: str) -> Dict:
         models_dir: Directory containing model artifacts
 
     Returns:
-        Dictionary with:
-            - model: Trained model
-            - scaler: Fitted scaler
-            - imputer: Fitted imputer (optional)
-            - feature_spec: Feature specification
+        Dictionary with model, scaler, imputer, feature_spec
 
     Raises:
         FileNotFoundError: If required artifacts are missing
     """
-    models_dir = Path(models_dir)
-
-    if not models_dir.exists():
-        raise FileNotFoundError(f"Models directory not found: {models_dir}")
-
-    # Load required artifacts
-    model = load_model_artifact(models_dir / "model.bin")
-    scaler = load_model_artifact(models_dir / "scaler.bin")
-    feature_spec = load_json(models_dir / "feature_spec.json")
-
-    # Load optional artifacts
-    imputer = None
-    imputer_path = models_dir / "imputer.bin"
-    if imputer_path.exists():
-        imputer = load_model_artifact(imputer_path)
-
-    artifacts = {
-        "model": model,
-        "scaler": scaler,
-        "imputer": imputer,
-        "feature_spec": feature_spec,
-    }
-
-    logger.info(
-        f"Loaded model artifacts from {models_dir} "
-        f"({len(feature_spec['features'])} features)"
-    )
-
-    return artifacts
+    return load_model_bundle(models_dir)
 
 
 def init_trend_detector(window: int = 5, threshold: float = 0.1) -> None:
@@ -100,22 +227,15 @@ def predict_window(
     Returns binary classification (HIGH/LOW) with confidence and trend.
 
     Args:
-        features: Window features as:
-            - Dict: feature_name -> value mapping
-            - np.ndarray: array of feature values
-            - List: list of feature values
+        features: Window features as dict, array, or list
         artifacts: Model artifacts from load_model()
         update_trend: Whether to update the trend detector
 
     Returns:
-        Dictionary with:
-            - level: "HIGH" or "LOW"
-            - confidence: Prediction confidence (0-1)
-            - trend: "INCREASING", "DECREASING", "STABLE", or "INSUFFICIENT_DATA"
-            - raw_score: Continuous prediction [0-1]
+        Dictionary with level, confidence, trend, raw_score
 
-    Raises:
-        ValueError: If features don't match expected format
+    Note:
+        For new code, prefer using CognitiveLoadPredictor class instead.
     """
     global _trend_detector
 
@@ -167,14 +287,11 @@ def predict_window(
     confidence = abs(proba - 0.5) * 2.0
     confidence = float(np.clip(confidence, 0.0, 1.0))
 
-    # Update trend detector
+    # Update trend detector (auto-initialize if needed)
     trend = Trend.INSUFFICIENT_DATA
-    if update_trend and _trend_detector is not None:
-        _trend_detector.add(raw_score)
-        trend = _trend_detector.get_trend()
-    elif _trend_detector is None:
-        # Auto-initialize if not done
-        init_trend_detector()
+    if update_trend:
+        if _trend_detector is None:
+            init_trend_detector()
         if _trend_detector is not None:
             _trend_detector.add(raw_score)
             trend = _trend_detector.get_trend()

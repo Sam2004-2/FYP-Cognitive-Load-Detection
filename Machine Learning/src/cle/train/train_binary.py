@@ -5,34 +5,39 @@ Classifies cognitive load as HIGH or LOW based on threshold.
 - HIGH: load_0_1 >= 0.5
 - LOW:  load_0_1 < 0.5
 
+Improvements over baseline:
+1. Feature engineering with derived features and interactions
+2. RobustScaler for outlier-resistant preprocessing
+3. Hyperparameter tuning with RandomizedSearchCV
+4. Ensemble methods (VotingClassifier)
+5. Probability-based session aggregation
+
 Uses subject-wise GroupKFold cross-validation to prevent data leakage.
 """
 
 import argparse
-import json
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.impute import SimpleImputer
-from sklearn.metrics import (
-    accuracy_score,
-    balanced_accuracy_score,
-    classification_report,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
+from sklearn.ensemble import (
+    GradientBoostingClassifier,
+    RandomForestClassifier,
+    ExtraTreesClassifier,
+    VotingClassifier,
 )
-from sklearn.model_selection import GroupKFold
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GroupKFold, RandomizedSearchCV
+from sklearn.preprocessing import LabelEncoder, RobustScaler
 
 from src.cle.logging_setup import get_logger, setup_logging
+from src.cle.train.metrics import compute_classification_metrics
 from src.cle.utils.io import load_features_csv, save_json, save_model_artifact
+from src.cle.extract.feature_engineering import compute_derived_features
 
 logger = get_logger(__name__)
 
@@ -40,8 +45,8 @@ logger = get_logger(__name__)
 CLASS_LABELS = ["LOW", "HIGH"]
 BINARY_THRESHOLD = 0.5  # >= 0.5 is HIGH
 
-# 9 base features (no derived features)
-FEATURE_NAMES = [
+# 9 base features
+BASE_FEATURE_NAMES = [
     "blink_rate",
     "blink_count",
     "mean_blink_duration",
@@ -53,10 +58,39 @@ FEATURE_NAMES = [
     "valid_frame_ratio",
 ]
 
+# Derived features added by feature engineering
+DERIVED_FEATURE_NAMES = [
+    "blink_time_ratio",
+    "log_blink_rate",
+    "blink_rate_sq",
+    "log_ear_std",
+    "ear_stability",
+    "perclos_logit",
+    "perclos_sq",
+    "brightness_cv",
+    "brightness_stability",
+    "blink_perclos_interaction",
+    "blink_ear_interaction",
+    "perclos_ear_interaction",
+    "quality_weighted_blink",
+    "reliable_perclos",
+    "fatigue_index",
+    "blink_regularity",
+]
+
 # Tasks to include
 TASK_FILTER = {
     "task_1", "task_2", "task_3", "task_4", "task_5",
     "task_6", "task_7", "task_8", "task_9"
+}
+
+# Hyperparameter search space
+PARAM_DISTRIBUTIONS = {
+    "n_estimators": [100, 150, 200, 300],
+    "max_depth": [4, 5, 6, 8],
+    "learning_rate": [0.05, 0.1, 0.15],
+    "min_samples_leaf": [2, 4, 8],
+    "max_features": ["sqrt", "log2", None],
 }
 
 
@@ -67,33 +101,46 @@ def set_seed(seed: int) -> None:
 
 
 def continuous_to_binary(y: np.ndarray, threshold: float = BINARY_THRESHOLD) -> np.ndarray:
-    """
-    Convert continuous load [0,1] to binary classes.
-
-    Args:
-        y: Continuous load values
-        threshold: Classification threshold (default 0.5)
-
-    Returns:
-        Binary labels: 0=LOW, 1=HIGH
-    """
+    """Convert continuous load [0,1] to binary classes."""
     return (y >= threshold).astype(int)
+
+
+def apply_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply feature engineering to add derived features."""
+    logger.info("Applying feature engineering...")
+    df = compute_derived_features(df)
+    return df
+
+
+def get_feature_names(use_derived: bool = True) -> List[str]:
+    """Get list of feature names to use."""
+    features = list(BASE_FEATURE_NAMES)
+    if use_derived:
+        features.extend(DERIVED_FEATURE_NAMES)
+    return features
 
 
 def prepare_data(
     df: pd.DataFrame,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    use_derived_features: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.DataFrame, List[str]]:
     """
     Prepare data for training.
 
     Returns:
-        X, y_continuous, y_binary, groups, metadata_df
+        X, y_continuous, y_binary, groups, metadata_df, feature_names
     """
-    # Extract features
-    available_features = [f for f in FEATURE_NAMES if f in df.columns]
-    if len(available_features) < len(FEATURE_NAMES):
-        missing = set(FEATURE_NAMES) - set(available_features)
-        logger.warning(f"Missing features: {missing}")
+    # Apply feature engineering if enabled
+    if use_derived_features:
+        df = apply_feature_engineering(df)
+
+    # Get feature names
+    feature_names = get_feature_names(use_derived_features)
+    available_features = [f for f in feature_names if f in df.columns]
+
+    if len(available_features) < len(feature_names):
+        missing = set(feature_names) - set(available_features)
+        logger.warning(f"Missing features (will be skipped): {missing}")
 
     X = df[available_features].values
     y_continuous = df["load_0_1"].values
@@ -113,37 +160,101 @@ def prepare_data(
     logger.info(f"Class distribution: LOW={n_low}, HIGH={n_high}")
     logger.info(f"Unique subjects: {len(np.unique(groups))}")
 
-    return X, y_continuous, y_binary, groups, metadata_df
+    return X, y_continuous, y_binary, groups, metadata_df, available_features
 
 
-def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
-    """Compute classification metrics."""
-    return {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
-        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
-        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
-        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
-        "n_samples": len(y_true),
-    }
-
-
-def aggregate_to_session(preds_df: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate window predictions to session level using majority voting."""
-    def majority_vote(x):
-        return int(np.round(x.mean()))  # >50% HIGH -> HIGH
-
-    session_df = (
-        preds_df.groupby(["user_id", "task"])
-        .agg(
-            y_true=("y_true", "first"),
-            y_pred=("y_pred", majority_vote),
-            n_windows=("y_pred", "count"),
+def aggregate_to_session_probability(preds_df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate window predictions to session level using probability averaging."""
+    if "prob_high" in preds_df.columns:
+        session_df = (
+            preds_df.groupby(["user_id", "task"])
+            .agg(
+                y_true=("y_true", "first"),
+                prob_high=("prob_high", "mean"),
+                n_windows=("y_pred", "count"),
+            )
+            .reset_index()
         )
-        .reset_index()
-    )
+        session_df["y_pred"] = (session_df["prob_high"] >= 0.5).astype(int)
+    else:
+        # Fallback to majority voting
+        def majority_vote(x):
+            return int(np.round(x.mean()))
+
+        session_df = (
+            preds_df.groupby(["user_id", "task"])
+            .agg(
+                y_true=("y_true", "first"),
+                y_pred=("y_pred", majority_vote),
+                n_windows=("y_pred", "count"),
+            )
+            .reset_index()
+        )
     return session_df
+
+
+def create_ensemble_model(seed: int = 42) -> VotingClassifier:
+    """Create an ensemble model combining multiple classifiers."""
+    estimators = [
+        ("rf", RandomForestClassifier(
+            n_estimators=200,
+            max_depth=15,
+            min_samples_leaf=4,
+            class_weight="balanced",
+            n_jobs=-1,
+            random_state=seed,
+        )),
+        ("xgb", GradientBoostingClassifier(
+            n_estimators=200,
+            max_depth=5,
+            learning_rate=0.05,
+            min_samples_leaf=4,
+            random_state=seed,
+        )),
+        ("extra_trees", ExtraTreesClassifier(
+            n_estimators=200,
+            max_depth=15,
+            min_samples_leaf=2,
+            class_weight="balanced",
+            n_jobs=-1,
+            random_state=seed,
+        )),
+        ("logistic", LogisticRegression(
+            C=1.0,
+            class_weight="balanced",
+            max_iter=1000,
+            random_state=seed,
+        )),
+    ]
+    return VotingClassifier(estimators=estimators, voting="soft", n_jobs=-1)
+
+
+def tune_hyperparameters(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    seed: int = 42,
+    n_iter: int = 20,
+) -> Dict:
+    """Tune hyperparameters using RandomizedSearchCV."""
+    logger.info(f"Running hyperparameter tuning ({n_iter} iterations)...")
+
+    base_model = GradientBoostingClassifier(random_state=seed)
+    search = RandomizedSearchCV(
+        base_model,
+        PARAM_DISTRIBUTIONS,
+        n_iter=n_iter,
+        cv=3,
+        scoring="balanced_accuracy",
+        n_jobs=-1,
+        random_state=seed,
+        verbose=0,
+    )
+    search.fit(X_train, y_train)
+
+    logger.info(f"Best params: {search.best_params_}")
+    logger.info(f"Best CV score: {search.best_score_:.4f}")
+
+    return search.best_params_
 
 
 def run_cross_validation(
@@ -153,9 +264,11 @@ def run_cross_validation(
     metadata_df: pd.DataFrame,
     n_splits: int = 5,
     seed: int = 42,
+    use_ensemble: bool = True,
+    tune_params: bool = True,
 ) -> Dict:
     """
-    Run subject-wise cross-validation.
+    Run subject-wise cross-validation with improvements.
 
     Returns:
         Dictionary with CV results
@@ -165,9 +278,11 @@ def run_cross_validation(
     cv = GroupKFold(n_splits=actual_splits)
 
     logger.info(f"Running {actual_splits}-fold GroupKFold CV")
+    logger.info(f"Using ensemble: {use_ensemble}, Tuning params: {tune_params}")
 
     fold_results = []
     all_predictions = []
+    best_params = None
 
     for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X, y_binary, groups)):
         logger.info(f"--- Fold {fold_idx + 1}/{actual_splits} ---")
@@ -176,40 +291,53 @@ def run_cross_validation(
         X_train, X_test = X[train_idx], X[test_idx]
         y_train, y_test = y_binary[train_idx], y_binary[test_idx]
 
-        # Impute and scale
+        # Impute missing values
         imputer = SimpleImputer(strategy="median")
         X_train = imputer.fit_transform(X_train)
         X_test = imputer.transform(X_test)
 
-        scaler = StandardScaler()
+        # Use RobustScaler (outlier-resistant)
+        scaler = RobustScaler()
         X_train = scaler.fit_transform(X_train)
         X_test = scaler.transform(X_test)
 
-        # Train XGBoost
-        model = GradientBoostingClassifier(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
-            random_state=seed,
-        )
+        # Choose model
+        if use_ensemble:
+            model = create_ensemble_model(seed)
+        elif tune_params and fold_idx == 0:
+            # Tune on first fold only to save time
+            best_params = tune_hyperparameters(X_train, y_train, seed, n_iter=20)
+            model = GradientBoostingClassifier(random_state=seed, **best_params)
+        elif best_params is not None:
+            model = GradientBoostingClassifier(random_state=seed, **best_params)
+        else:
+            model = GradientBoostingClassifier(
+                n_estimators=200,
+                max_depth=5,
+                learning_rate=0.1,
+                random_state=seed,
+            )
+
         model.fit(X_train, y_train)
 
-        # Predict
+        # Predict with probabilities
         y_pred = model.predict(X_test)
+        y_proba = model.predict_proba(X_test)[:, 1]  # Probability of HIGH
 
         # Window-level metrics
-        window_metrics = compute_metrics(y_test, y_pred)
+        window_metrics = compute_classification_metrics(y_test, y_pred)
         logger.info(f"Window: Acc={window_metrics['accuracy']:.3f}, F1={window_metrics['f1']:.3f}")
 
-        # Build predictions DataFrame
+        # Build predictions DataFrame with probabilities
         test_metadata = metadata_df.iloc[test_idx].copy()
         test_metadata["y_true"] = y_test
         test_metadata["y_pred"] = y_pred
+        test_metadata["prob_high"] = y_proba
         test_metadata["fold"] = fold_idx
 
-        # Session-level metrics
-        session_df = aggregate_to_session(test_metadata)
-        session_metrics = compute_metrics(
+        # Session-level metrics using probability aggregation
+        session_df = aggregate_to_session_probability(test_metadata)
+        session_metrics = compute_classification_metrics(
             session_df["y_true"].values,
             session_df["y_pred"].values,
         )
@@ -225,13 +353,13 @@ def run_cross_validation(
     # Aggregate results
     all_preds_df = pd.concat(all_predictions, ignore_index=True)
 
-    overall_window = compute_metrics(
+    overall_window = compute_classification_metrics(
         all_preds_df["y_true"].values,
         all_preds_df["y_pred"].values,
     )
 
-    overall_session_df = aggregate_to_session(all_preds_df)
-    overall_session = compute_metrics(
+    overall_session_df = aggregate_to_session_probability(all_preds_df)
+    overall_session = compute_classification_metrics(
         overall_session_df["y_true"].values,
         overall_session_df["y_pred"].values,
     )
@@ -242,6 +370,7 @@ def run_cross_validation(
         "overall_window_metrics": overall_window,
         "overall_session_metrics": overall_session,
         "predictions_df": all_preds_df,
+        "best_params": best_params,
     }
 
 
@@ -249,20 +378,28 @@ def train_final_model(
     X: np.ndarray,
     y: np.ndarray,
     seed: int = 42,
+    use_ensemble: bool = True,
+    best_params: Optional[Dict] = None,
 ) -> Tuple:
     """Train final model on all data."""
     imputer = SimpleImputer(strategy="median")
     X_imputed = imputer.fit_transform(X)
 
-    scaler = StandardScaler()
+    scaler = RobustScaler()
     X_scaled = scaler.fit_transform(X_imputed)
 
-    model = GradientBoostingClassifier(
-        n_estimators=100,
-        max_depth=6,
-        learning_rate=0.1,
-        random_state=seed,
-    )
+    if use_ensemble:
+        model = create_ensemble_model(seed)
+    elif best_params is not None:
+        model = GradientBoostingClassifier(random_state=seed, **best_params)
+    else:
+        model = GradientBoostingClassifier(
+            n_estimators=200,
+            max_depth=5,
+            learning_rate=0.1,
+            random_state=seed,
+        )
+
     model.fit(X_scaled, y)
 
     return model, scaler, imputer
@@ -297,6 +434,21 @@ def main():
         help="Random seed",
     )
     parser.add_argument(
+        "--no-ensemble",
+        action="store_true",
+        help="Disable ensemble model (use single GradientBoosting)",
+    )
+    parser.add_argument(
+        "--no-tuning",
+        action="store_true",
+        help="Disable hyperparameter tuning",
+    )
+    parser.add_argument(
+        "--no-derived-features",
+        action="store_true",
+        help="Disable derived feature engineering",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -309,10 +461,17 @@ def main():
     setup_logging(level=args.log_level, log_dir="logs", log_file="train_binary.log")
     set_seed(args.seed)
 
+    use_ensemble = not args.no_ensemble
+    tune_params = not args.no_tuning
+    use_derived = not args.no_derived_features
+
     logger.info("=" * 60)
-    logger.info("BINARY CLASSIFICATION TRAINING")
+    logger.info("IMPROVED BINARY CLASSIFICATION TRAINING")
     logger.info(f"Classes: {CLASS_LABELS}")
     logger.info(f"Threshold: >= {BINARY_THRESHOLD} is HIGH")
+    logger.info(f"Feature engineering: {use_derived}")
+    logger.info(f"Ensemble model: {use_ensemble}")
+    logger.info(f"Hyperparameter tuning: {tune_params}")
     logger.info("=" * 60)
 
     # Load data
@@ -324,8 +483,10 @@ def main():
         df = df[df["task"].isin(TASK_FILTER)]
         logger.info(f"Filtered to {len(df)} rows for tasks: {TASK_FILTER}")
 
-    # Prepare data
-    X, y_continuous, y_binary, groups, metadata_df = prepare_data(df)
+    # Prepare data with feature engineering
+    X, y_continuous, y_binary, groups, metadata_df, feature_names = prepare_data(
+        df, use_derived_features=use_derived
+    )
 
     # Run CV
     logger.info("\nRunning cross-validation...")
@@ -333,6 +494,8 @@ def main():
         X, y_binary, groups, metadata_df,
         n_splits=args.cv_folds,
         seed=args.seed,
+        use_ensemble=use_ensemble,
+        tune_params=tune_params,
     )
 
     # Print summary
@@ -352,7 +515,11 @@ def main():
 
     # Train final model
     logger.info("\nTraining final model on all data...")
-    model, scaler, imputer = train_final_model(X, y_binary, args.seed)
+    model, scaler, imputer = train_final_model(
+        X, y_binary, args.seed,
+        use_ensemble=use_ensemble,
+        best_params=cv_results.get("best_params"),
+    )
 
     # Save artifacts
     output_dir = Path(args.output)
@@ -364,11 +531,15 @@ def main():
 
     # Save feature spec
     feature_spec = {
-        "features": FEATURE_NAMES,
-        "n_features": len(FEATURE_NAMES),
+        "features": feature_names,
+        "base_features": BASE_FEATURE_NAMES,
+        "derived_features": DERIVED_FEATURE_NAMES if use_derived else [],
+        "n_features": len(feature_names),
         "task_mode": "binary_classification",
         "classes": CLASS_LABELS,
         "threshold": BINARY_THRESHOLD,
+        "use_ensemble": use_ensemble,
+        "use_derived_features": use_derived,
     }
     save_json(feature_spec, output_dir / "feature_spec.json")
 
@@ -377,8 +548,12 @@ def main():
         "training_date": datetime.now().isoformat(),
         "seed": args.seed,
         "n_samples": len(X),
+        "n_features": len(feature_names),
         "n_subjects": len(np.unique(groups)),
         "cv_folds": cv_results["n_splits"],
+        "use_ensemble": use_ensemble,
+        "use_derived_features": use_derived,
+        "best_params": cv_results.get("best_params"),
         "window_metrics": cv_results["overall_window_metrics"],
         "session_metrics": cv_results["overall_session_metrics"],
     }

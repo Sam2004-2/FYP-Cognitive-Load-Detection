@@ -63,10 +63,6 @@ def eye_aspect_ratio(eye_coords: np.ndarray) -> float:
     return ear
 
 
-# Pupil/iris functions removed - no longer tracking pupil diameter
-# Focus shifted to EAR-based features which are more robust and calibration-free
-
-
 def compute_brightness(frame: np.ndarray, face_roi: Optional[Tuple[int, int, int, int]] = None) -> float:
     """
     Compute mean brightness of frame or face ROI.
@@ -168,8 +164,6 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
     ear_left = eye_aspect_ratio(landmark_result["left_eye"]["coords"])
     ear_right = eye_aspect_ratio(landmark_result["right_eye"]["coords"])
     ear_mean = (ear_left + ear_right) / 2.0
-
-    # Pupil extraction removed - no longer tracking pupil diameter
 
     # Extract brightness from face ROI
     face_roi = extract_face_roi(landmark_result["landmarks_px"])

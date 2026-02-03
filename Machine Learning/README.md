@@ -118,8 +118,3 @@ CSV data files are gitignored due to size. Backups maintained at:
 ## License
 
 See main project LICENSE file.
-
-## Contributors
-
-- Feature extraction and AVCAffe integration: Claude Sonnet 4.5
-- Project structure and StressID integration: [Original authors]

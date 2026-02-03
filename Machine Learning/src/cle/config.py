@@ -57,7 +57,11 @@ class Config:
         Returns:
             Config instance with default settings
         """
-        default_path = Path(__file__).parent.parent.parent / "configs" / "default.yaml"
+        configs_dir = Path(__file__).parent.parent.parent / "configs"
+        # Try default.yaml first, fall back to config.yaml
+        default_path = configs_dir / "default.yaml"
+        if not default_path.exists():
+            default_path = configs_dir / "config.yaml"
         return cls.from_yaml(str(default_path))
 
     def _validate(self) -> None:
@@ -67,7 +71,7 @@ class Config:
         Raises:
             ValueError: If configuration is invalid
         """
-        # Check required top-level keys (tepr removed - feature disabled)
+        # Check required top-level keys
         required_keys = ["seed", "windows", "quality", "blink", "features_enabled"]
         for key in required_keys:
             if key not in self._config:
@@ -90,8 +94,6 @@ class Config:
             raise ValueError("blink.ear_thresh must be positive")
         if self._config["blink"]["min_blink_ms"] <= 0:
             raise ValueError("blink.min_blink_ms must be positive")
-
-        # TEPR validation removed - feature disabled
 
     def get(self, key: str, default: Any = None) -> Any:
         """

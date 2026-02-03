@@ -2,6 +2,14 @@
 
 Complete guide to using the Cognitive Load Estimation system.
 
+## Overview
+
+The system provides **binary classification** (HIGH/LOW) of cognitive load with **trend detection**:
+
+- **HIGH**: Elevated cognitive load (score ≥ 0.5)
+- **LOW**: Normal cognitive load (score < 0.5)
+- **Trend**: INCREASING, DECREASING, or STABLE
+
 ## Getting Started
 
 ### Prerequisites
@@ -74,21 +82,28 @@ Real-time cognitive load monitoring during learning or work activities.
 | Element | Description |
 |---------|-------------|
 | **Timer** | Session duration (MM:SS format) |
-| **Cognitive Load Gauge** | Visual indicator of current load (0-1 scale) |
+| **Load Level** | Current classification: HIGH or LOW |
+| **Trend Indicator** | ↑ INCREASING, ↓ DECREASING, or → STABLE |
 | **Backend Status** | Green dot = connected, Red = error |
 | **Confidence** | Prediction confidence percentage |
 | **Pause** | Temporarily pause monitoring |
 | **End Session** | End session and view summary |
 
-### Cognitive Load Gauge
+### Cognitive Load Display
 
-The circular gauge shows your current cognitive load:
+The display shows your current cognitive load level:
 
-| Load Level | Color | Meaning |
-|------------|-------|---------|
-| 0.0 - 0.3 | Green | Low cognitive load |
-| 0.3 - 0.7 | Yellow | Moderate cognitive load |
-| 0.7 - 1.0 | Red | High cognitive load |
+| Level | Color | Meaning |
+|-------|-------|---------|
+| **LOW** | Green | Normal cognitive load - you're doing fine |
+| **HIGH** | Red | Elevated cognitive load - consider a break |
+
+**Trend Indicator:**
+| Trend | Symbol | Meaning |
+|-------|--------|---------|
+| INCREASING | ↑ | Load is rising over time |
+| DECREASING | ↓ | Load is decreasing over time |
+| STABLE | → | Load is steady |
 
 ### Task Panel
 
@@ -238,10 +253,11 @@ cd "Machine Learning"
 # Combine multiple collection sessions
 cat data/collected/*.csv > data/processed/my_training_data.csv
 
-# Train new model
-python -m src.cle.train.train \
-    --features data/processed/my_training_data.csv \
-    --out models/my_custom_model
+# Train new binary classifier
+python -m src.cle.train.train_binary \
+    --input data/processed/my_training_data.csv \
+    --output models/my_custom_model \
+    --cv-folds 5
 ```
 
 ## Summary Page
@@ -251,16 +267,17 @@ After ending a session, the Summary page shows:
 ### Session Statistics
 
 - **Duration**: Total session time
-- **Average Load**: Mean cognitive load during session
-- **Peak Load**: Maximum load reached
+- **Load Distribution**: Time spent in HIGH vs LOW states
+- **Predominant Trend**: Overall trend during session
 - **Interventions**: Number of break suggestions triggered
 
 ### Load History Chart
 
 Time-series visualization showing:
-- Cognitive load over time
-- Intervention points marked
-- Pause periods highlighted
+- Cognitive load level (HIGH/LOW) over time
+- Trend changes marked
+- Intervention points highlighted
+- Pause periods indicated
 
 ## Settings Page
 
@@ -286,7 +303,8 @@ Configure application parameters:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Intervention Threshold | Load level to trigger intervention | 0.7 |
+| Binary Threshold | Score threshold for HIGH classification | 0.5 |
+| Intervention Threshold | When to suggest breaks | HIGH for 5+ predictions |
 | Confidence Threshold | Minimum confidence to show prediction | 0.6 |
 
 ## Tips for Best Results

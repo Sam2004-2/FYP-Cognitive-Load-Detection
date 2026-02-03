@@ -116,9 +116,6 @@ def interpolate_gaps(frame_features: List[Dict], max_gap: int = 3) -> List[Dict]
                 "ear_left",
                 "ear_right",
                 "ear_mean",
-                "pupil_left",
-                "pupil_right",
-                "pupil_mean",
                 "brightness",
             ]
 

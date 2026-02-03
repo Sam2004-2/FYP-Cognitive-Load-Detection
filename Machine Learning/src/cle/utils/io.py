@@ -257,3 +257,52 @@ def load_json(path: str) -> Dict[str, Any]:
     logger.info(f"Loaded JSON from {path.name}")
     return data
 
+
+def load_model_bundle(
+    models_dir: str,
+    model_name: str = "model.bin",
+    include_imputer: bool = True,
+) -> Dict[str, Any]:
+    """
+    Load complete model bundle (model, scaler, imputer, feature_spec).
+
+    This consolidates the common pattern of loading multiple model artifacts
+    from a directory into a single function call.
+
+    Args:
+        models_dir: Directory containing model artifacts
+        model_name: Name of model file (default: model.bin)
+        include_imputer: Whether to load imputer (default: True)
+
+    Returns:
+        Dictionary with keys:
+            - model: The trained model
+            - scaler: Fitted scaler
+            - imputer: Fitted imputer (if include_imputer=True and exists)
+            - feature_spec: Feature specification dictionary
+
+    Raises:
+        FileNotFoundError: If required artifacts (model, scaler, feature_spec) are missing
+    """
+    models_dir = Path(models_dir)
+
+    if not models_dir.exists():
+        raise FileNotFoundError(f"Models directory not found: {models_dir}")
+
+    artifacts = {
+        "model": load_model_artifact(models_dir / model_name),
+        "scaler": load_model_artifact(models_dir / "scaler.bin"),
+        "feature_spec": load_json(models_dir / "feature_spec.json"),
+    }
+
+    if include_imputer:
+        imputer_path = models_dir / "imputer.bin"
+        if imputer_path.exists():
+            artifacts["imputer"] = load_model_artifact(imputer_path)
+        else:
+            artifacts["imputer"] = None
+            logger.debug(f"No imputer found at {imputer_path}")
+
+    logger.info(f"Loaded model bundle from {models_dir}")
+    return artifacts
+

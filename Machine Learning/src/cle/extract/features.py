@@ -10,48 +10,9 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 
 from src.cle.logging_setup import get_logger
+from src.cle.utils.config_utils import get_config_value
 
 logger = get_logger(__name__)
-
-
-def _get_config_value(config: Union[Dict, Any], key: str, default: Any = None) -> Any:
-    """
-    Get configuration value supporting both Config objects and plain dicts.
-
-    Supports dot notation for nested keys (e.g., 'blink.ear_thresh').
-
-    Args:
-        config: Configuration (Config object or dict)
-        key: Configuration key (supports dot notation)
-        default: Default value if key not found
-
-    Returns:
-        Configuration value or default
-    """
-    # Try as plain dict first (handles both dict and Config.to_dict())
-    if isinstance(config, dict):
-        keys = key.split('.')
-        value = config
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
-            else:
-                return default
-        return value
-    
-    # If config has a get method that supports dot notation (Config object)
-    if hasattr(config, 'get') and callable(config.get):
-        try:
-            return config.get(key, default)
-        except (AttributeError, TypeError):
-            pass
-    
-    return default
-
-
-# TEPR functions removed - pupil-based features are no longer used
-# Feature set now focuses on EAR-based (Eye Aspect Ratio) measurements which are
-# more robust and don't require calibration or special lighting conditions
 
 
 def detect_blinks(
@@ -136,9 +97,9 @@ def compute_blink_features(
     blinks = detect_blinks(
         ear_series,
         fps,
-        ear_threshold=_get_config_value(config, "blink.ear_thresh", 0.21),
-        min_blink_ms=_get_config_value(config, "blink.min_blink_ms", 120),
-        max_blink_ms=_get_config_value(config, "blink.max_blink_ms", 400),
+        ear_threshold=get_config_value(config, "blink.ear_thresh", 0.21),
+        min_blink_ms=get_config_value(config, "blink.min_blink_ms", 120),
+        max_blink_ms=get_config_value(config, "blink.max_blink_ms", 400),
     )
 
     # Compute blink rate (blinks per minute)
@@ -213,7 +174,7 @@ def compute_control_features(
         std_brightness = 0.0
 
     # PERCLOS
-    ear_threshold = _get_config_value(config, "blink.ear_thresh", 0.21)
+    ear_threshold = get_config_value(config, "blink.ear_thresh", 0.21)
     perclos = compute_perclos(ear_series, ear_threshold)
 
     return {
@@ -251,22 +212,20 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
     ear_series = np.array([f["ear_mean"] for f in valid_frames])
     brightness_series = np.array([f["brightness"] for f in valid_frames])
 
-    # TEPR features removed - no longer computing pupil-based features
-
     # Compute blink features (if enabled)
-    if _get_config_value(config, "features_enabled.blinks", True):
+    if get_config_value(config, "features_enabled.blinks", True):
         blink_features = compute_blink_features(ear_series, fps, config)
         features.update(blink_features)
 
     # Compute control features (if enabled)
-    if _get_config_value(config, "features_enabled.perclos", True) or _get_config_value(config, "features_enabled.brightness", True):
+    if get_config_value(config, "features_enabled.perclos", True) or get_config_value(config, "features_enabled.brightness", True):
         control_features = compute_control_features(brightness_series, ear_series, config)
 
-        if _get_config_value(config, "features_enabled.brightness", True):
+        if get_config_value(config, "features_enabled.brightness", True):
             features["mean_brightness"] = control_features["mean_brightness"]
             features["std_brightness"] = control_features["std_brightness"]
 
-        if _get_config_value(config, "features_enabled.perclos", True):
+        if get_config_value(config, "features_enabled.perclos", True):
             features["perclos"] = control_features["perclos"]
 
     # Add quality metrics
@@ -289,9 +248,7 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
     """
     features = {}
 
-    # TEPR features removed - no longer part of feature set
-
-    if _get_config_value(config, "features_enabled.blinks", True):
+    if get_config_value(config, "features_enabled.blinks", True):
         features.update({
             "blink_rate": np.nan,
             "blink_count": np.nan,
@@ -299,13 +256,13 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
             "ear_std": np.nan,
         })
 
-    if _get_config_value(config, "features_enabled.brightness", True):
+    if get_config_value(config, "features_enabled.brightness", True):
         features.update({
             "mean_brightness": np.nan,
             "std_brightness": np.nan,
         })
 
-    if _get_config_value(config, "features_enabled.perclos", True):
+    if get_config_value(config, "features_enabled.perclos", True):
         features["perclos"] = np.nan
 
     features.update({
@@ -328,9 +285,7 @@ def get_feature_names(config: Union[Dict, Any]) -> List[str]:
     """
     feature_names = []
 
-    # TEPR features removed - no longer part of feature set
-
-    if _get_config_value(config, "features_enabled.blinks", True):
+    if get_config_value(config, "features_enabled.blinks", True):
         feature_names.extend([
             "blink_rate",
             "blink_count",
@@ -338,13 +293,13 @@ def get_feature_names(config: Union[Dict, Any]) -> List[str]:
             "ear_std",
         ])
 
-    if _get_config_value(config, "features_enabled.brightness", True):
+    if get_config_value(config, "features_enabled.brightness", True):
         feature_names.extend([
             "mean_brightness",
             "std_brightness",
         ])
 
-    if _get_config_value(config, "features_enabled.perclos", True):
+    if get_config_value(config, "features_enabled.perclos", True):
         feature_names.append("perclos")
 
     feature_names.extend([
