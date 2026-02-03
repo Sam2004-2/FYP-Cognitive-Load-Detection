@@ -88,17 +88,27 @@ Check that a trained model exists:
 
 ```bash
 # Windows
-dir models\stress_classifier_rf\
+dir models\binary_classifier\
 
 # Linux/macOS
-ls models/stress_classifier_rf/
+ls models/binary_classifier/
 ```
 
 You should see:
 - `model.bin`
 - `scaler.bin`
+- `imputer.bin`
 - `feature_spec.json`
-- `calibration.json`
+- `metrics.json`
+
+If the model doesn't exist, train it first:
+
+```bash
+python -m src.cle.train.train_binary \
+    --input data/avcaffe_features_final.csv \
+    --output models/binary_classifier \
+    --cv-folds 5
+```
 
 ### 7. Test Backend Installation
 
@@ -112,6 +122,7 @@ Expected output:
 INFO: Starting Cognitive Load Estimation API
 INFO: Loaded configuration (hash: xxxxxxxx)
 INFO: Loaded model artifacts with 9 features
+INFO: Initialized trend detector (window=5, threshold=0.1)
 INFO: API ready to accept requests
 INFO: Uvicorn running on http://127.0.0.1:8000
 ```
@@ -179,7 +190,7 @@ The browser should open automatically to http://localhost:3000.
 - [ ] Backend dependencies installed (`pip install -e .`)
 - [ ] FastAPI/uvicorn installed (`pip install fastapi uvicorn`)
 - [ ] MediaPipe model exists (`models/face_landmarker.task`)
-- [ ] ML model exists (`models/stress_classifier_rf/`)
+- [ ] ML model trained (`models/binary_classifier/`)
 - [ ] Backend starts without errors
 - [ ] Health endpoint returns healthy status
 - [ ] Frontend dependencies installed (`npm install`)

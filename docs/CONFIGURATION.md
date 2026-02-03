@@ -10,11 +10,9 @@ Located in `Machine Learning/configs/`:
 
 | File | Description |
 |------|-------------|
-| `default.yaml` | Base configuration template |
-| `regression.yaml` | StressID regression config |
-| `avcaffe_regression.yaml` | AVCAffe regression config |
-| `avcaffe_classification.yaml` | AVCAffe classification config |
-| `avcaffe_classification_improved.yaml` | Enhanced classification |
+| `config.yaml` | **Single unified configuration** for binary classification |
+
+> **Note:** The project has been simplified to use a single configuration file. Previous config files (`default.yaml`, `regression.yaml`, `avcaffe_*.yaml`) have been archived.
 
 ### Frontend (TypeScript)
 
@@ -28,179 +26,95 @@ Located in `UI/src/config/featureConfig.ts`
 
 ```yaml
 # =============================================================================
-# Cognitive Load Estimation - Configuration Reference
+# Cognitive Load Detection - Simplified Configuration
+# Binary classification (HIGH/LOW) with trend detection
 # =============================================================================
 
-# Random seed for reproducibility
-seed: 42
+# =============================================================================
+# Data Paths
+# =============================================================================
+data:
+  features_path: "data/avcaffe_features_final.csv"
+  labels_path: "data/avcaffe_labels.csv"
 
-# Fallback FPS if video metadata is unavailable
-fps_fallback: 30.0
+# =============================================================================
+# Feature Configuration
+# =============================================================================
+# 9 base features - no derived features for simplicity
+features:
+  - blink_rate         # Blinks per minute
+  - blink_count        # Total blinks in window
+  - mean_blink_duration # Average blink length (ms)
+  - ear_std            # Eye Aspect Ratio std dev
+  - perclos            # % eye closure
+  - mean_brightness    # Face region brightness
+  - std_brightness     # Brightness variability
+  - mean_quality       # Detection quality
+  - valid_frame_ratio  # Valid frames ratio
 
-# -----------------------------------------------------------------------------
-# Windowing Parameters
-# -----------------------------------------------------------------------------
-windows:
-  length_s: 10.0    # Window length in seconds
-                    # Longer = more stable, shorter = more responsive
-                    # Typical: 10s (production), 5s (responsive)
-
-  step_s: 2.5       # Step size in seconds (overlap = length - step)
-                    # 2.5s with 10s window = 75% overlap
-                    # Smaller step = more predictions but higher CPU
-
-# -----------------------------------------------------------------------------
-# Quality Control Thresholds
-# -----------------------------------------------------------------------------
-quality:
-  min_face_conf: 0.5        # Minimum face detection confidence (0-1)
-                            # Higher = more reliable but may reject valid frames
-                            # Typical: 0.5 (balanced), 0.7 (strict)
-
-  max_bad_frame_ratio: 0.05 # Maximum ratio of invalid frames per window
-                            # 0.05 = reject windows with >5% bad frames
-                            # Lower = stricter quality, may drop more windows
+features_enabled:
+  blinks: true         # Blink rate and statistics
+  brightness: true     # Ambient brightness control
+  perclos: true        # Percentage of eye closure
 
 # -----------------------------------------------------------------------------
 # Blink Detection Parameters
 # -----------------------------------------------------------------------------
 blink:
-  ear_thresh: 0.21    # Eye Aspect Ratio threshold for blink detection
-                      # Below this = eye considered closed
-                      # Typical: 0.21 (most people), 0.18-0.25 (individual variation)
+  ear_thresh: 0.21     # Eye Aspect Ratio threshold for blink detection
+                       # Below this = eye considered closed
+                       # Typical: 0.21 (most people), 0.18-0.25 (individual variation)
 
-  min_blink_ms: 120   # Minimum blink duration in milliseconds
-                      # Filters out noise/measurement errors
-                      # Typical: 100-150ms
+  min_blink_ms: 120    # Minimum blink duration in milliseconds
+                       # Filters out noise/measurement errors
 
-  max_blink_ms: 400   # Maximum blink duration in milliseconds
-                      # Filters out intentional eye closures
-                      # Typical: 350-500ms
+  max_blink_ms: 400    # Maximum blink duration in milliseconds
+                       # Filters out intentional eye closures
 
-# -----------------------------------------------------------------------------
-# TEPR Parameters (Disabled by default)
-# -----------------------------------------------------------------------------
-tepr:
-  baseline_s: 10.0          # Baseline window duration in seconds
-  min_baseline_samples: 150 # Minimum samples for valid baseline
-
-# -----------------------------------------------------------------------------
-# Feature Flags
-# -----------------------------------------------------------------------------
-features_enabled:
-  tepr: false         # Task-Evoked Pupillary Response
-                      # Disabled - requires calibration and special lighting
-
-  blinks: true        # Blink rate and statistics
-                      # Primary cognitive load indicator
-
-  perclos: true       # Percentage of eye closure
-                      # Key fatigue/drowsiness metric
-
-  brightness: true    # Ambient brightness control
-                      # Helps normalize for lighting conditions
-
-  fix_sac: false      # Fixations and saccades
-                      # Disabled - requires calibration
-
-  gaze_entropy: false # Gaze entropy
-                      # Disabled - requires calibration
-
-# -----------------------------------------------------------------------------
+# =============================================================================
 # Model Configuration
-# -----------------------------------------------------------------------------
+# =============================================================================
 model:
-  type: "logreg"      # Model type: "logreg", "gbt", "rf", "xgb"
-                      # logreg: Fast, interpretable
-                      # gbt: Good accuracy, slower
-                      # rf: Robust, handles outliers
-                      # xgb: Best accuracy, slowest
+  type: xgboost        # GradientBoostingClassifier
+  params:
+    n_estimators: 100  # Number of trees
+    max_depth: 6       # Maximum tree depth
+    learning_rate: 0.1 # Learning rate
 
-  calibration: "platt" # Calibration method: "platt" or "isotonic"
-                       # platt: Sigmoid fit, works well for most
-                       # isotonic: Non-parametric, needs more data
+# =============================================================================
+# Training Configuration
+# =============================================================================
+training:
+  cv_folds: 5          # Number of cross-validation folds
+  cv_method: group_kfold  # Subject-wise cross-validation (prevents data leakage)
+  group_column: user_id   # Column to group by
+  seed: 42             # Random seed for reproducibility
 
-  # Logistic Regression parameters
-  logreg_params:
-    max_iter: 1000    # Maximum iterations
-    C: 0.1            # Regularization strength (smaller = stronger)
-    penalty: "l2"     # Regularization type
+# =============================================================================
+# Classification Thresholds
+# =============================================================================
+threshold:
+  binary: 0.5          # >= 0.5 is HIGH, < 0.5 is LOW
 
-  # Gradient Boosted Trees parameters
-  gbt_params:
-    n_estimators: 100   # Number of trees
-    max_depth: 3        # Maximum tree depth
-    learning_rate: 0.1  # Learning rate
+# =============================================================================
+# Trend Detection
+# =============================================================================
+trend:
+  window: 5            # Compare last 5 vs previous 5 predictions
+  threshold: 0.1       # 10% change required to detect trend
+  max_history: 100     # Maximum predictions to keep in buffer
 
-  # Random Forest parameters
-  rf_params:
-    n_estimators: 100   # Number of trees
-    max_depth: 10       # Maximum tree depth
-    min_samples_leaf: 5 # Minimum samples per leaf
+# =============================================================================
+# Window Configuration (for feature extraction)
+# =============================================================================
+window:
+  length_s: 10.0       # Window length in seconds
+                       # 10s provides stable measurements
 
-  # XGBoost parameters (regression)
-  xgb_params:
-    n_estimators: 200
-    max_depth: 4
-    learning_rate: 0.05
-    min_samples_leaf: 5
+  step_s: 2.5          # Step size in seconds (75% overlap)
+                       # Prediction every 2.5 seconds
 
-# -----------------------------------------------------------------------------
-# Evaluation Configuration
-# -----------------------------------------------------------------------------
-eval:
-  metric: ["auc", "f1"]  # Metrics to compute
-                         # Options: auc, f1, accuracy, precision, recall
-
-  split_by_role: true    # Use 'role' column for train/test split
-                         # If true, respects existing train/test assignments
-
-  test_size: 0.2         # Test split ratio (if split_by_role is false)
-
-  stratify: true         # Stratify splits by label
-                         # Maintains class distribution in splits
-
-# -----------------------------------------------------------------------------
-# Cross-Validation Configuration
-# -----------------------------------------------------------------------------
-cv:
-  method: group_kfold    # CV method: "group_kfold", "stratified_kfold"
-                         # group_kfold: Groups by participant (recommended)
-                         # stratified_kfold: Stratifies by label
-
-  n_splits: 5            # Number of CV folds
-
-# -----------------------------------------------------------------------------
-# Real-time Processing
-# -----------------------------------------------------------------------------
-realtime:
-  smoothing_alpha: 0.4   # EWMA smoothing parameter (0-1)
-                         # Higher = more responsive, lower = smoother
-                         # 0.4 = balanced responsiveness and stability
-
-  conf_threshold: 0.6    # Minimum confidence to display result
-                         # Below this, prediction may be suppressed
-
-  display_fps: true      # Show FPS in real-time output
-
-# -----------------------------------------------------------------------------
-# Paths (relative to project root)
-# -----------------------------------------------------------------------------
-paths:
-  raw_dir: "data/raw"
-  interim_dir: "data/interim"
-  processed_dir: "data/processed"
-  models_dir: "models"
-  reports_dir: "reports"
-
-# -----------------------------------------------------------------------------
-# Logging Configuration
-# -----------------------------------------------------------------------------
-logging:
-  level: "INFO"        # Logging level: DEBUG, INFO, WARNING, ERROR
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  save_logs: true      # Save logs to file
-  log_dir: "logs"
+  min_valid_ratio: 0.5 # Minimum valid frame ratio to accept window
 ```
 
 ---
@@ -264,47 +178,28 @@ export const LANDMARK_INDICES = {
 ```python
 from src.cle.config import load_config
 
-# Load default config
+# Load default config (configs/config.yaml)
 config = load_config(None)
 
 # Load specific config
-config = load_config("configs/avcaffe_regression.yaml")
+config = load_config("configs/config.yaml")
 
 # Access values with dot notation
 ear_thresh = config.get("blink.ear_thresh", 0.21)
-window_length = config.get("windows.length_s", 10.0)
-model_type = config.get("model.type", "logreg")
+window_length = config.get("window.length_s", 10.0)
+model_type = config.get("model.type", "xgboost")
 ```
 
-### Overriding via CLI
+### Training with Configuration
 
 ```bash
-# Override model type
-python -m src.cle.train.train \
-    --features data.csv \
-    --model-type rf
+cd "Machine Learning"
 
-# Override config file
-python -m src.cle.train.train \
-    --features data.csv \
-    --config configs/custom.yaml
-```
-
-### Environment-Based Configuration
-
-Create environment-specific configs:
-
-```yaml
-# configs/production.yaml
-windows:
-  length_s: 10.0
-  step_s: 5.0  # Longer interval for stability
-
-realtime:
-  smoothing_alpha: 0.3  # More smoothing
-
-logging:
-  level: "WARNING"
+# Train binary classifier with default config
+python -m src.cle.train.train_binary \
+    --input data/avcaffe_features_final.csv \
+    --output models/binary_classifier \
+    --cv-folds 5
 ```
 
 ---
@@ -328,6 +223,14 @@ logging:
 | **Glasses** | 0.18 | Lower threshold for glasses |
 | **Large eyes** | 0.25 | Higher threshold |
 
+### Trend Detection
+
+| Scenario | window | threshold | Notes |
+|----------|--------|-----------|-------|
+| **Responsive** | 3 | 0.15 | Faster trend detection |
+| **Balanced** | 5 | 0.1 | Default |
+| **Stable** | 10 | 0.05 | Very stable trend signals |
+
 ### Smoothing
 
 | Scenario | smoothing_alpha | Notes |
@@ -336,106 +239,58 @@ logging:
 | **Balanced** | 0.4 | Default |
 | **Smooth** | 0.2 | Stable but delayed |
 
-### Model Selection
-
-| Scenario | Model | Notes |
-|----------|-------|-------|
-| **Quick/Simple** | logreg | Fast, interpretable |
-| **Balanced** | gbt | Good accuracy |
-| **Best accuracy** | rf/xgb | Slower, robust |
-| **Regression** | xgb | Continuous output |
-
 ---
 
-## Available Configurations
+## Archived Configurations
 
-### default.yaml
+> **Note:** The following configurations have been archived in `archive/configs/` and are no longer actively used. The project now uses a single unified `config.yaml`.
 
-Base template with sensible defaults for classification.
+### Archived Files
 
-### regression.yaml
+| File | Description |
+|------|-------------|
+| `default.yaml` | Old base template |
+| `regression.yaml` | StressID regression |
+| `avcaffe_regression.yaml` | AVCAffe continuous regression |
+| `avcaffe_classification.yaml` | AVCAffe classification |
+| `avcaffe_classification_improved.yaml` | Enhanced with feature engineering |
 
-StressID regression configuration:
-- Binary stress labels
-- GroupKFold CV
-- Standard features
-
-### avcaffe_regression.yaml
-
-AVCAffe continuous regression:
-- Cognitive load 0-1
-- XGBoost regressor
-- GroupKFold by participant
-
-```yaml
-task_mode: regression
-regression:
-  model_type: xgb
-  xgb_params:
-    n_estimators: 200
-    max_depth: 4
-    learning_rate: 0.05
-```
-
-### avcaffe_classification.yaml
-
-AVCAffe binary classification:
-- Low/High labels
-- Threshold at 0.5
-
-### avcaffe_classification_improved.yaml
-
-Enhanced classification with:
-- Feature engineering
-- Advanced hyperparameters
-- Ensemble methods
+These configurations can still be referenced for thesis documentation or if you need to experiment with alternative approaches.
 
 ---
 
 ## Creating Custom Configurations
 
-1. **Start from default:**
+1. **Start from config.yaml:**
    ```bash
-   cp configs/default.yaml configs/my_config.yaml
+   cp configs/config.yaml configs/my_config.yaml
    ```
 
 2. **Modify parameters:**
    ```yaml
    # my_config.yaml
-   windows:
+   window:
      length_s: 8.0
      step_s: 2.0
 
    model:
-     type: "rf"
-     rf_params:
+     type: xgboost
+     params:
        n_estimators: 200
+       max_depth: 8
+
+   trend:
+     window: 7
+     threshold: 0.08
    ```
 
-3. **Use in training:**
-   ```bash
-   python -m src.cle.train.train \
-       --features data.csv \
-       --config configs/my_config.yaml
-   ```
+3. **The training script uses hardcoded model parameters** but you can modify `train_binary.py` directly if needed.
 
 ---
 
 ## Configuration Validation
 
-Configurations are validated on load:
-
-```python
-# In src/cle/config.py
-def validate_config(config):
-    """Validate configuration values."""
-    assert config.get("windows.length_s") > 0
-    assert 0 < config.get("windows.step_s") <= config.get("windows.length_s")
-    assert 0 < config.get("blink.ear_thresh") < 1
-    assert config.get("model.type") in ["logreg", "gbt", "rf", "xgb"]
-```
-
-Invalid configurations raise `ValueError` with descriptive message.
+Configurations are validated on load. Invalid configurations raise `ValueError` with descriptive message.
 
 ---
 
@@ -448,19 +303,11 @@ Invalid configurations raise `ValueError` with descriptive message.
 config = load_config("/full/path/to/config.yaml")
 ```
 
-### "Unknown model type"
-
-```yaml
-# Ensure model.type is one of: logreg, gbt, rf, xgb
-model:
-  type: "rf"  # Not "random_forest"
-```
-
 ### "Invalid parameter combination"
 
 ```yaml
 # Ensure step_s <= length_s
-windows:
+window:
   length_s: 10.0
   step_s: 2.5  # Not 15.0
 ```

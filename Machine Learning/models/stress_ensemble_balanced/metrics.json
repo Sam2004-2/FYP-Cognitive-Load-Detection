@@ -1,0 +1,8 @@
+{
+  "accuracy": 0.7625816993464052,
+  "balanced_accuracy": 0.7189811149122269,
+  "f1": 0.5549770290964777,
+  "threshold": 0.5,
+  "n_samples": 6120,
+  "n_subjects": 53
+}

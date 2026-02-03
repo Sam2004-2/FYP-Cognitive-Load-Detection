@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
+import cv2
 import pandas as pd
 from tqdm import tqdm
 
@@ -260,8 +261,24 @@ def main():
 
                     all_window_features.extend(window_features)
 
+            except FileNotFoundError as e:
+                logger.error(f"Video file not accessible: {video_path} - {e}")
+                continue
+            except cv2.error as e:
+                logger.error(f"OpenCV error processing {video_path.name}: {e}")
+                continue
+            except MemoryError as e:
+                logger.error(f"Out of memory processing {video_path.name}: {e}")
+                logger.warning("Consider processing fewer videos or using smaller windows")
+                continue
+            except KeyboardInterrupt:
+                logger.warning("Processing interrupted by user")
+                break
             except Exception as e:
-                logger.error(f"Error processing video {video_path.name}: {e}", exc_info=True)
+                logger.error(
+                    f"Unexpected error processing {video_path.name}: {e}",
+                    exc_info=True,
+                )
                 continue
 
     # Convert to DataFrame

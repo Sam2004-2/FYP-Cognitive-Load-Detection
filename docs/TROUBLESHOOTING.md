@@ -10,6 +10,9 @@ Common issues and solutions for the Cognitive Load Estimation system.
 # Check backend health
 curl http://localhost:8000/health
 
+# Check model info
+curl http://localhost:8000/model-info
+
 # Check Python environment
 python --version
 pip list | grep -E "mediapipe|fastapi|scikit"
@@ -19,7 +22,7 @@ node --version
 npm --version
 
 # Check model files
-ls "Machine Learning/models/stress_classifier_rf/"
+ls "Machine Learning/models/binary_classifier/"
 ```
 
 ---
@@ -53,14 +56,21 @@ ls "Machine Learning/models/stress_classifier_rf/"
 
 3. **Model files missing**
    ```
-   ERROR: Models directory not found: models/stress_classifier_rf
+   ERROR: Models directory not found: models/binary_classifier
    ```
 
-   Solution: Ensure model directory exists with:
+   Solution: Train the binary classifier first:
+   ```bash
+   python -m src.cle.train.train_binary \
+       --input data/avcaffe_features_final.csv \
+       --output models/binary_classifier
+   ```
+
+   Or ensure model directory exists with:
    - `model.bin`
    - `scaler.bin`
+   - `imputer.bin`
    - `feature_spec.json`
-   - `calibration.json`
 
 4. **Python version incompatible**
    ```bash
@@ -76,13 +86,14 @@ ls "Machine Learning/models/stress_classifier_rf/"
 **Solution:**
 ```bash
 # Verify model files exist
-ls "Machine Learning/models/stress_classifier_rf/"
+ls "Machine Learning/models/binary_classifier/"
 
 # Expected files:
 # model.bin
 # scaler.bin
+# imputer.bin
 # feature_spec.json
-# calibration.json
+# metrics.json
 ```
 
 **Symptom:** `ModuleNotFoundError: No module named 'src'`

@@ -1,5 +1,15 @@
-# Cognitive Load Detection - Simplified Configuration
+# =============================================================================
+# Cognitive Load Detection Configuration
+# =============================================================================
 # Binary classification (HIGH/LOW) with trend detection
+#
+# This configuration file defines all parameters for the cognitive load
+# detection pipeline, including feature extraction, model training, and
+# real-time prediction.
+# =============================================================================
+
+# Random seed for reproducibility across all components
+seed: 42
 
 # =============================================================================
 # Data Paths
@@ -9,71 +19,148 @@ data:
   labels_path: "data/avcaffe_labels.csv"
 
 # =============================================================================
+# Window Configuration
+# =============================================================================
+# Defines how video frames are grouped into windows for feature extraction.
+# Longer windows capture more context but increase latency.
+windows:
+  # Window length in seconds
+  # Typical range: 5-30 seconds
+  # 10s provides good balance of context vs. responsiveness
+  length_s: 10.0
+
+  # Step size in seconds (determines overlap)
+  # step_s = length_s means no overlap
+  # step_s = length_s / 4 means 75% overlap (recommended for real-time)
+  step_s: 2.5
+
+  # Minimum valid frame ratio to accept a window
+  # Windows with too many bad frames are discarded
+  min_valid_ratio: 0.5
+
+# =============================================================================
+# Quality Thresholds
+# =============================================================================
+# Criteria for accepting or rejecting data during processing
+quality:
+  # Maximum ratio of bad/invalid frames allowed in a window
+  # Range: 0.0-1.0
+  # 0.2 means up to 20% bad frames allowed
+  max_bad_frame_ratio: 0.2
+
+  # Minimum face detection confidence from MediaPipe
+  # Range: 0.0-1.0
+  # Higher values = stricter face detection
+  min_face_conf: 0.5
+
+# =============================================================================
+# Blink Detection Parameters
+# =============================================================================
+# Eye Aspect Ratio (EAR) based blink detection settings
+blink:
+  # EAR threshold for blink detection
+  # Typical range: 0.18-0.25
+  # Lower = more sensitive (more false positives)
+  # Higher = less sensitive (may miss fast blinks)
+  # 0.21 is empirically validated for most subjects
+  ear_thresh: 0.21
+
+  # Minimum blink duration in milliseconds
+  # Range: 80-150ms typically
+  # Too low: saccades may be counted as blinks
+  # Too high: fast blinks may be missed
+  min_blink_ms: 120
+
+  # Maximum blink duration in milliseconds
+  # Range: 300-500ms typically
+  # Closures longer than this are likely fatigue, not blinks
+  max_blink_ms: 400
+
+# =============================================================================
 # Feature Configuration
 # =============================================================================
-# 9 base features - no derived features for simplicity
+# The 9 base features used for classification
 features:
-  - blink_rate
-  - blink_count
-  - mean_blink_duration
-  - ear_std
-  - perclos
-  - mean_brightness
-  - std_brightness
-  - mean_quality
-  - valid_frame_ratio
+  - blink_rate          # Blinks per minute (10-25 typical)
+  - blink_count         # Total blinks in window (3-10 typical for 10s)
+  - mean_blink_duration # Average blink duration in ms (150-300 typical)
+  - ear_std             # Eye Aspect Ratio variability (0.01-0.05 typical)
+  - perclos             # Percentage of eye closure (0-0.15 typical)
+  - mean_brightness     # Face region brightness (0-255 scale)
+  - std_brightness      # Brightness variability (5-30 typical)
+  - mean_quality        # Face detection confidence (0.7-1.0 desired)
+  - valid_frame_ratio   # Ratio of usable frames (0.8-1.0 desired)
 
+# Feature groups that can be enabled/disabled
 features_enabled:
-  blinks: true
-  brightness: true
-  perclos: true
-
-# Blink detection parameters
-blink:
-  ear_thresh: 0.21
-  min_blink_ms: 120
-  max_blink_ms: 400
+  blinks: true      # blink_rate, blink_count, mean_blink_duration, ear_std
+  brightness: true  # mean_brightness, std_brightness
+  perclos: true     # perclos
 
 # =============================================================================
 # Model Configuration
 # =============================================================================
 model:
-  type: xgboost  # GradientBoostingClassifier
+  # Model type: xgboost uses sklearn GradientBoostingClassifier
+  type: xgboost
   params:
+    # Number of boosting rounds
+    # Range: 50-500
+    # Higher = more capacity but risk of overfitting
     n_estimators: 100
+
+    # Maximum tree depth
+    # Range: 3-10
+    # Deeper = more complex patterns but risk of overfitting
     max_depth: 6
+
+    # Learning rate (shrinkage)
+    # Range: 0.01-0.3
+    # Lower = more robust but needs more estimators
     learning_rate: 0.1
 
 # =============================================================================
 # Training Configuration
 # =============================================================================
 training:
+  # Number of cross-validation folds
+  # Range: 3-10
+  # 5 is standard; fewer if data is limited
   cv_folds: 5
-  cv_method: group_kfold  # Subject-wise cross-validation
+
+  # Cross-validation method
+  # group_kfold: Subject-wise split (prevents data leakage)
+  # kfold: Random split (NOT recommended - causes data leakage)
+  cv_method: group_kfold
+
+  # Column name containing subject IDs for grouping
   group_column: user_id
-  seed: 42
 
 # =============================================================================
 # Classification Thresholds
 # =============================================================================
 threshold:
-  binary: 0.5  # >= 0.5 is HIGH, < 0.5 is LOW
+  # Binary classification threshold
+  # Predictions >= 0.5 are classified as HIGH
+  # Predictions < 0.5 are classified as LOW
+  binary: 0.5
 
 # =============================================================================
 # Trend Detection
 # =============================================================================
+# Detects INCREASING/DECREASING/STABLE trends in cognitive load over time
 trend:
-  window: 5           # Compare last 5 vs previous 5 predictions
-  threshold: 0.1      # 10% change required to detect trend
-  max_history: 100    # Maximum predictions to keep in buffer
+  # Number of recent predictions to compare
+  # Compares mean of last N vs previous N predictions
+  window: 5
 
-# =============================================================================
-# Window Configuration (for feature extraction)
-# =============================================================================
-window:
-  length_s: 10.0      # 10-second windows
-  step_s: 2.5         # 2.5-second step (75% overlap)
-  min_valid_ratio: 0.5
+  # Minimum change required to detect a trend
+  # Range: 0.05-0.2
+  # 0.1 = 10% change required
+  threshold: 0.1
+
+  # Maximum predictions to keep in history buffer
+  max_history: 100
 
 # =============================================================================
 # Output Paths
@@ -81,3 +168,9 @@ window:
 output:
   model_path: "models/binary_classifier"
   log_dir: "logs"
+
+# =============================================================================
+# Fallback Values
+# =============================================================================
+# Used when metadata is unavailable
+fps_fallback: 30.0  # Default FPS if video metadata unavailable

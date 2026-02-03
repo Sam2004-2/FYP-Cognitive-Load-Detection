@@ -10,18 +10,11 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 
 from src.cle.config import load_config
 from src.cle.extract.features import get_feature_names
 from src.cle.logging_setup import get_logger, setup_logging
+from src.cle.train.metrics import compute_classification_metrics
 from src.cle.utils.io import (
     load_features_csv,
     load_json,
@@ -59,28 +52,15 @@ def evaluate_model(
     y_proba = model.predict_proba(X_test_scaled)[:, 1]
     y_pred = (y_proba >= threshold).astype(int)
 
-    # Compute metrics
-    acc = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-    auc = roc_auc_score(y_test, y_proba)
-    cm = confusion_matrix(y_test, y_pred)
+    # Compute metrics using shared function
+    metrics = compute_classification_metrics(y_test, y_pred, y_proba)
 
-    metrics = {
-        "accuracy": float(acc),
-        "precision": float(precision),
-        "recall": float(recall),
-        "f1": float(f1),
-        "auc": float(auc),
-        "confusion_matrix": cm.tolist(),
-        "n_samples": len(y_test),
-        "n_positive": int(np.sum(y_test == 1)),
-        "n_negative": int(np.sum(y_test == 0)),
-    }
-
-    logger.info(f"Evaluation metrics: AUC={auc:.4f}, F1={f1:.4f}, Precision={precision:.4f}, Recall={recall:.4f}, Acc={acc:.4f}")
-    logger.info(f"Confusion matrix:\n{cm}")
+    logger.info(
+        f"Evaluation metrics: AUC={metrics.get('auc', 'N/A'):.4f}, "
+        f"F1={metrics['f1']:.4f}, Precision={metrics['precision']:.4f}, "
+        f"Recall={metrics['recall']:.4f}, Acc={metrics['accuracy']:.4f}"
+    )
+    logger.info(f"Confusion matrix:\n{np.array(metrics['confusion_matrix'])}")
 
     return metrics
 

@@ -119,7 +119,10 @@ def test_compute_blink_features():
 
 
 def test_empty_ear_series():
-    """Test handling of empty EAR series."""
+    """Test handling of empty EAR series.
+
+    Empty series should return NaN to distinguish invalid data from real zeros.
+    """
     fps = 30.0
     ear_series = np.array([])
 
@@ -129,9 +132,11 @@ def test_empty_ear_series():
     config = {"blink.ear_thresh": 0.21, "blink.min_blink_ms": 120, "blink.max_blink_ms": 400}
     features = compute_blink_features(ear_series, fps, config)
 
-    assert features["blink_rate"] == 0.0
-    assert features["blink_count"] == 0.0
-    assert features["mean_blink_duration"] == 0.0
+    # Empty series returns NaN (not 0) to indicate invalid/missing data
+    assert np.isnan(features["blink_rate"])
+    assert np.isnan(features["blink_count"])
+    assert np.isnan(features["mean_blink_duration"])
+    assert np.isnan(features["ear_std"])
 
 
 if __name__ == "__main__":

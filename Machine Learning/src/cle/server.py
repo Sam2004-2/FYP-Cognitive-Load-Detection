@@ -191,7 +191,18 @@ async def reset_trend():
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    Returns the current status of the API service, including whether
+    the ML model is loaded and ready for predictions.
+
+    Use this endpoint to verify the service is operational before
+    sending prediction requests.
+
+    Returns:
+        HealthResponse with status, model_loaded flag, and feature count
+    """
     model_loaded = artifacts is not None
     feature_count = len(artifacts["feature_spec"]["features"]) if model_loaded else None
 
@@ -204,7 +215,19 @@ async def health_check():
 
 @app.get("/model-info", response_model=ModelInfoResponse)
 async def get_model_info():
-    """Get model information."""
+    """
+    Get information about the loaded model.
+
+    Returns the model's expected features, classification mode, and
+    class labels. Use this to verify your feature extraction matches
+    what the model expects.
+
+    Returns:
+        ModelInfoResponse with features list, task mode, and class labels
+
+    Raises:
+        503: If model is not loaded
+    """
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
@@ -222,11 +245,45 @@ async def predict_cognitive_load(request: PredictionRequest):
     """
     Predict cognitive load from window features.
 
-    Args:
-        request: Window features
+    Performs binary classification (HIGH/LOW) and tracks trend over time.
+    Send features computed over a 10-20 second window for best results.
+    For real-time monitoring, call every 2.5-5 seconds.
+
+    **Feature Requirements:**
+    All 9 features must be provided (see /model-info for list).
+    Features should be computed using the same pipeline as training.
+
+    **Trend Detection:**
+    - INCREASING: Recent predictions significantly higher than earlier
+    - DECREASING: Recent predictions significantly lower than earlier
+    - STABLE: No significant change detected
+    - INSUFFICIENT_DATA: Not enough predictions yet (need ~10)
+
+    Call /reset-trend when starting a new session to clear history.
+
+    **Example Request:**
+    ```json
+    {
+        "features": {
+            "blink_rate": 15.2,
+            "blink_count": 5,
+            "mean_blink_duration": 180.5,
+            "ear_std": 0.03,
+            "mean_brightness": 128.5,
+            "std_brightness": 12.3,
+            "perclos": 0.05,
+            "mean_quality": 0.95,
+            "valid_frame_ratio": 0.98
+        }
+    }
+    ```
 
     Returns:
-        Binary classification (HIGH/LOW) with confidence and trend
+        PredictionResponse with level, confidence, trend, and raw_score
+
+    Raises:
+        503: If model is not loaded
+        500: If prediction fails
     """
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
@@ -267,14 +324,28 @@ async def save_training_data(request: TrainingDataRequest):
     """
     Save collected training data to CSV file.
 
-    This endpoint saves labeled training samples collected from the
-    Data Collection mode in the frontend.
+    Use this endpoint to persist labeled training samples collected
+    during Data Collection sessions. Samples are saved to
+    `data/collected/` with a JSON metadata sidecar file.
 
-    Args:
-        request: Training data with participant info and samples
+    **Data Collection Protocol:**
+    1. Baseline/Rest tasks -> label as "low"
+    2. Easy/Medium tasks -> label as "low"
+    3. Hard/Challenging tasks -> label as "high"
+
+    **Output Files:**
+    - CSV: `data/collected/collected_{participant_id}_{timestamp}.csv`
+    - JSON: Same path with `.json` extension (metadata)
+
+    The CSV format is compatible with the training pipeline
+    (train_binary.py) for model retraining.
 
     Returns:
-        Confirmation with filename and sample count
+        TrainingDataResponse with filename and sample count
+
+    Raises:
+        400: If no samples provided
+        500: If file save fails
     """
     if not request.samples:
         raise HTTPException(status_code=400, detail="No samples provided")
