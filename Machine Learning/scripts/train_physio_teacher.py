@@ -38,6 +38,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from cle.extract.physio_features import get_physio_feature_names
 
@@ -320,7 +321,7 @@ def main():
     parser.add_argument(
         "--labels",
         type=Path,
-        default=Path(__file__).parent.parent / "data" / "raw" / "self_assessments_loadindex.csv",
+        default=Path(__file__).parent.parent / "data" / "raw" / "assessments" / "self_assessments_loadindex.csv",
         help="Path to self-assessment labels CSV",
     )
     parser.add_argument(

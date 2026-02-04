@@ -50,6 +50,30 @@ def load_physio_file(file_path: Path) -> Optional[pd.DataFrame]:
         return None
 
 
+def normalize_signal(signal: np.ndarray) -> np.ndarray:
+    """
+    Normalize raw ADC signal to zero-mean, unit-variance.
+    
+    StressID physiological data uses raw 16-bit ADC values.
+    NeuroKit2 expects normalized signals for proper processing.
+    
+    Args:
+        signal: Raw signal array (ADC values)
+        
+    Returns:
+        Normalized signal (z-scored)
+    """
+    signal = signal.astype(np.float64)
+    mean_val = np.mean(signal)
+    std_val = np.std(signal)
+    
+    if std_val < 1e-6:
+        # Constant signal - return zeros
+        return np.zeros_like(signal)
+    
+    return (signal - mean_val) / std_val
+
+
 def compute_ecg_features(ecg_signal: np.ndarray, sampling_rate: int = SAMPLING_RATE) -> Dict[str, float]:
     """
     Extract heart rate and HRV features from ECG signal.
@@ -65,41 +89,62 @@ def compute_ecg_features(ecg_signal: np.ndarray, sampling_rate: int = SAMPLING_R
         "hr": np.nan,
         "rmssd": np.nan,
         "sdnn": np.nan,
-        "ecg_quality": np.nan,
+        "ecg_quality": 0.0,
     }
     
     try:
-        # Clean and process ECG
-        ecg_cleaned = nk.ecg_clean(ecg_signal, sampling_rate=sampling_rate)
-        
-        # Compute signal quality
-        quality = nk.ecg_quality(ecg_cleaned, sampling_rate=sampling_rate, method="zhao2018")
-        features["ecg_quality"] = float(np.mean(quality))
-        
-        # Only extract features if quality is acceptable
-        if features["ecg_quality"] < QUALITY_THRESHOLD:
+        # Check for valid signal
+        if len(ecg_signal) < sampling_rate:  # Less than 1 second
+            return features
+            
+        # Check for constant signal
+        if np.std(ecg_signal) < 1e-6:
             return features
         
-        # Find R-peaks
-        _, rpeaks = nk.ecg_peaks(ecg_cleaned, sampling_rate=sampling_rate)
-        r_peak_indices = rpeaks["ECG_R_Peaks"]
-        
-        if len(r_peak_indices) < 3:
-            return features
-        
-        # Compute RR intervals (in ms)
-        rr_intervals = np.diff(r_peak_indices) / sampling_rate * 1000
-        
-        # Heart rate (bpm)
-        features["hr"] = 60000 / np.mean(rr_intervals) if len(rr_intervals) > 0 else np.nan
-        
-        # HRV time-domain features
-        if len(rr_intervals) >= 2:
+        # Suppress warnings during processing
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            # Normalize raw ADC signal for NeuroKit2
+            ecg_normalized = normalize_signal(ecg_signal)
+            
+            # Clean and process ECG
+            ecg_cleaned = nk.ecg_clean(ecg_normalized, sampling_rate=sampling_rate)
+            
+            # Find R-peaks first (this is the main indicator of signal quality)
+            _, rpeaks = nk.ecg_peaks(ecg_cleaned, sampling_rate=sampling_rate)
+            r_peak_indices = rpeaks.get("ECG_R_Peaks", [])
+            
+            if r_peak_indices is None or len(r_peak_indices) < 3:
+                return features
+            
+            # Compute RR intervals (in ms)
+            rr_intervals = np.diff(r_peak_indices) / sampling_rate * 1000
+            
+            # Filter out physiologically implausible RR intervals (300-2000ms, i.e., 30-200 bpm)
+            rr_intervals = rr_intervals[(rr_intervals > 300) & (rr_intervals < 2000)]
+            
+            if len(rr_intervals) < 2:
+                return features
+            
+            # Heart rate (bpm)
+            features["hr"] = 60000 / np.mean(rr_intervals)
+            
+            # HRV time-domain features
             features["sdnn"] = float(np.std(rr_intervals, ddof=1))
             
             # RMSSD: root mean square of successive differences
             successive_diffs = np.diff(rr_intervals)
-            features["rmssd"] = float(np.sqrt(np.mean(successive_diffs ** 2)))
+            if len(successive_diffs) > 0:
+                features["rmssd"] = float(np.sqrt(np.mean(successive_diffs ** 2)))
+            
+            # Quality based on: did we get valid features?
+            # Good quality = valid HR in physiological range (40-180 bpm)
+            if 40 <= features["hr"] <= 180 and not np.isnan(features["rmssd"]):
+                features["ecg_quality"] = 1.0
+            else:
+                features["ecg_quality"] = 0.3  # Partial quality
         
     except Exception as e:
         # Signal processing failed - return NaN features
@@ -126,20 +171,38 @@ def compute_eda_features(eda_signal: np.ndarray, sampling_rate: int = SAMPLING_R
     }
     
     try:
-        # Process EDA signal
-        eda_signals, info = nk.eda_process(eda_signal, sampling_rate=sampling_rate)
+        # Check for valid signal
+        if len(eda_signal) < sampling_rate:  # Less than 1 second
+            return features
+            
+        # Check for constant signal
+        if np.std(eda_signal) < 1e-6:
+            return features
+        
+        # Process EDA signal with error suppression
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            # Normalize raw ADC signal for NeuroKit2
+            eda_normalized = normalize_signal(eda_signal)
+            
+            eda_signals, info = nk.eda_process(eda_normalized, sampling_rate=sampling_rate)
         
         # Skin Conductance Level (tonic component) - mean level
         if "EDA_Tonic" in eda_signals.columns:
-            features["scl"] = float(eda_signals["EDA_Tonic"].mean())
+            tonic_values = eda_signals["EDA_Tonic"].dropna()
+            if len(tonic_values) > 0:
+                features["scl"] = float(tonic_values.mean())
         
         # Skin Conductance Responses (phasic component)
         scr_peaks = info.get("SCR_Peaks", [])
-        features["scr_count"] = float(len(scr_peaks))
+        if scr_peaks is not None:
+            features["scr_count"] = float(len(scr_peaks))
         
         # Mean SCR amplitude
-        if "SCR_Amplitude" in info and len(info["SCR_Amplitude"]) > 0:
-            amplitudes = [a for a in info["SCR_Amplitude"] if not np.isnan(a)]
+        if "SCR_Amplitude" in info and info["SCR_Amplitude"] is not None:
+            amplitudes = [a for a in info["SCR_Amplitude"] if a is not None and not np.isnan(a)]
             if amplitudes:
                 features["scr_amplitude_mean"] = float(np.mean(amplitudes))
         
@@ -168,12 +231,29 @@ def compute_resp_features(resp_signal: np.ndarray, sampling_rate: int = SAMPLING
     }
     
     try:
-        # Process respiration signal
-        rsp_signals, info = nk.rsp_process(resp_signal, sampling_rate=sampling_rate)
+        # Check for valid signal
+        if len(resp_signal) < sampling_rate:  # Less than 1 second
+            return features
+            
+        # Check for constant or near-constant signal
+        if np.std(resp_signal) < 1e-6:
+            return features
+        
+        # Process respiration signal with error suppression
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            # Normalize raw ADC signal for NeuroKit2
+            resp_normalized = normalize_signal(resp_signal)
+            
+            rsp_signals, info = nk.rsp_process(resp_normalized, sampling_rate=sampling_rate)
         
         # Respiratory rate (breaths per minute)
         if "RSP_Rate" in rsp_signals.columns:
-            features["resp_rate"] = float(rsp_signals["RSP_Rate"].mean())
+            rate_values = rsp_signals["RSP_Rate"].dropna()
+            if len(rate_values) > 0:
+                features["resp_rate"] = float(rate_values.mean())
         
         # Breath amplitude
         if "RSP_Amplitude" in rsp_signals.columns:
