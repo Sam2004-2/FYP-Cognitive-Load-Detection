@@ -17,8 +17,10 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add Machine Learning root to path for imports
+ML_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ML_ROOT))
+sys.path.insert(0, str(ML_ROOT / "src"))
 
 from cle.extract.physio_features import (
     SAMPLING_RATE,

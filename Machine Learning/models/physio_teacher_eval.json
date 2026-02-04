@@ -1,0 +1,79 @@
+{
+  "fold_results": [
+    {
+      "fold": 1,
+      "accuracy": 0.5576923076923077,
+      "f1": 0.6461538461538462,
+      "auc": 0.5595238095238095,
+      "n_train": 208,
+      "n_test": 52
+    },
+    {
+      "fold": 2,
+      "accuracy": 0.5192307692307693,
+      "f1": 0.5614035087719298,
+      "auc": 0.5984848484848484,
+      "n_train": 208,
+      "n_test": 52
+    },
+    {
+      "fold": 3,
+      "accuracy": 0.5576923076923077,
+      "f1": 0.5818181818181818,
+      "auc": 0.5585185185185186,
+      "n_train": 208,
+      "n_test": 52
+    },
+    {
+      "fold": 4,
+      "accuracy": 0.4423076923076923,
+      "f1": 0.40816326530612246,
+      "auc": 0.4666666666666667,
+      "n_train": 208,
+      "n_test": 52
+    },
+    {
+      "fold": 5,
+      "accuracy": 0.5576923076923077,
+      "f1": 0.6349206349206349,
+      "auc": 0.6166666666666667,
+      "n_train": 208,
+      "n_test": 52
+    }
+  ],
+  "overall": {
+    "accuracy": 0.5269230769230769,
+    "f1": 0.5743944636678201,
+    "auc": 0.5363095238095238
+  },
+  "feature_importance": {
+    "hr": 0.18192363652597532,
+    "rmssd": 0.10360246262618428,
+    "sdnn": 0.0882983481712552,
+    "scl": 0.0838285670961027,
+    "scr_count": 0.12347591542344498,
+    "scr_amplitude_mean": 0.12334895818536123,
+    "resp_rate": 0.11471440897583234,
+    "resp_amplitude_mean": 0.08543567680019748,
+    "resp_variability": 0.09537202619564643
+  },
+  "timestamp": "2026-02-04T22:48:32.024153",
+  "quality_threshold": 0.5,
+  "features": [
+    "hr",
+    "rmssd",
+    "sdnn",
+    "scl",
+    "scr_count",
+    "scr_amplitude_mean",
+    "resp_rate",
+    "resp_amplitude_mean",
+    "resp_variability"
+  ],
+  "tasks": [
+    "Counting1",
+    "Math",
+    "Counting2",
+    "Speaking"
+  ]
+}
