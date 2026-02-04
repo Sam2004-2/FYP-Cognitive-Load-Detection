@@ -50,3 +50,18 @@ eval:
   metrics: ["mae", "rmse", "spearman", "r2"]
   report_window_level: true   # Also report window-level metrics (for debugging)
   report_session_level: true  # Primary evaluation level
+
+# Soft label distillation configuration
+# Use physiological teacher model to generate improved training labels
+distillation:
+  # Target column for training: "load_0_1" (baseline) or "soft_label" (distillation)
+  target_column: "load_0_1"
+
+  # ECG quality threshold for using teacher predictions
+  # Windows below this threshold fall back to load_0_1
+  quality_threshold: 0.5
+
+  # Path to trained teacher model artifacts (relative to models/ directory)
+  teacher_model: "physio_teacher.joblib"
+  teacher_scaler: "physio_scaler.joblib"
+  teacher_imputer: "physio_imputer.joblib"
