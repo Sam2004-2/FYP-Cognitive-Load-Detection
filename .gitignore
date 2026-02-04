@@ -91,3 +91,5 @@ ui/.env.production.local
 
 #Ignore Videos Folder
 Videos/
+
+Physiological/

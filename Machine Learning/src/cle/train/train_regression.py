@@ -89,37 +89,50 @@ def create_regression_model(model_type: str, config: dict, seed: int = 42):
 def prepare_regression_data(
     merged_df: pd.DataFrame,
     feature_names: List[str],
+    target_column: str = "load_0_1",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
     """
     Prepare data for regression training.
 
     Args:
-        merged_df: DataFrame with features and load_0_1 label
+        merged_df: DataFrame with features and target label
         feature_names: List of feature column names
+        target_column: Name of the target column (default: "load_0_1", can be "soft_label")
 
     Returns:
         Tuple of (X, y, groups, metadata_df)
         - X: Feature matrix
-        - y: Target values (load_0_1)
+        - y: Target values
         - groups: Encoded subject IDs for GroupKFold
         - metadata_df: DataFrame with user_id, task, window info for session aggregation
     """
+    # Validate target column exists
+    if target_column not in merged_df.columns:
+        raise ValueError(
+            f"Target column '{target_column}' not found in DataFrame. "
+            f"Available columns: {merged_df.columns.tolist()}"
+        )
+
     # Extract features
     X = merged_df[feature_names].values
 
     # Extract target
-    y = merged_df["load_0_1"].values
+    y = merged_df[target_column].values
 
     # Encode subjects for grouping
     label_encoder = LabelEncoder()
     groups = label_encoder.fit_transform(merged_df["user_id"].values)
 
     # Keep metadata for session aggregation
+    # Always include load_0_1 for evaluation even when training on soft_label
     metadata_cols = ["user_id", "task", "t_start_s", "t_end_s", "load_0_1"]
+    if target_column not in metadata_cols:
+        metadata_cols.append(target_column)
     available_cols = [c for c in metadata_cols if c in merged_df.columns]
     metadata_df = merged_df[available_cols].copy()
 
     logger.info(f"Prepared data: {X.shape[0]} samples, {X.shape[1]} features")
+    logger.info(f"Target column: {target_column}")
     logger.info(f"Target range: [{y.min():.3f}, {y.max():.3f}]")
     logger.info(f"Unique subjects (groups): {len(np.unique(groups))}")
 
@@ -458,6 +471,12 @@ def main():
         help="Use Leave-One-Subject-Out CV instead of GroupKFold",
     )
     parser.add_argument(
+        "--target-col",
+        type=str,
+        default=None,
+        help="Target column for training (default: load_0_1, use soft_label for distillation)",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -519,8 +538,12 @@ def main():
     feature_names = get_feature_names(config.to_dict())
     logger.info(f"Using {len(feature_names)} features: {feature_names}")
 
+    # Determine target column (for soft label distillation support)
+    target_column = args.target_col or config.get("distillation.target_column", "load_0_1")
+    logger.info(f"Target column: {target_column}")
+
     # Prepare data
-    X, y, groups, metadata_df = prepare_regression_data(merged_df, feature_names)
+    X, y, groups, metadata_df = prepare_regression_data(merged_df, feature_names, target_column)
 
     # Model factory
     def model_factory():
