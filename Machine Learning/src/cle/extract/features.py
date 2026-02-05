@@ -126,10 +126,10 @@ def compute_blink_features(
     """
     if len(ear_series) == 0:
         return {
-            "blink_rate": np.nan,
-            "blink_count": np.nan,
-            "mean_blink_duration": np.nan,
-            "ear_std": np.nan,
+            "blink_rate": 0.0,
+            "blink_count": 0.0,
+            "mean_blink_duration": 0.0,
+            "ear_std": 0.0,
         }
 
     # Detect blinks
@@ -274,6 +274,47 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
     features["mean_quality"] = float(np.mean(qualities))
     features["valid_frame_ratio"] = len(valid_frames) / len(window_data)
 
+    # Geometry + motion features (if enabled)
+    if _get_config_value(config, "features_enabled.geometry", False):
+        mouth_vals = np.array([f.get("mouth_mar", np.nan) for f in valid_frames], dtype=float)
+        mouth_vals = mouth_vals[np.isfinite(mouth_vals)]
+        if len(mouth_vals) > 0:
+            features["mouth_open_mean"] = float(np.mean(mouth_vals))
+            features["mouth_open_std"] = float(np.std(mouth_vals))
+        else:
+            features["mouth_open_mean"] = 0.0
+            features["mouth_open_std"] = 0.0
+
+        roll_vals = np.array([f.get("roll", np.nan) for f in valid_frames], dtype=float)
+        roll_vals = roll_vals[np.isfinite(roll_vals)]
+        features["roll_std"] = float(np.std(roll_vals)) if len(roll_vals) > 0 else 0.0
+
+        # Motion: speed of eye-center movement for valid consecutive frames
+        speeds: List[float] = []
+        for prev, curr in zip(valid_frames, valid_frames[1:]):
+            try:
+                prev_idx = prev.get("frame_idx")
+                curr_idx = curr.get("frame_idx")
+                if prev_idx is not None and curr_idx is not None and curr_idx != prev_idx + 1:
+                    continue
+            except Exception:
+                # If frame_idx is missing/non-numeric, fall back to sequential assumption.
+                pass
+
+            dx = float(curr.get("eye_center_x", 0.0) - prev.get("eye_center_x", 0.0))
+            dy = float(curr.get("eye_center_y", 0.0) - prev.get("eye_center_y", 0.0))
+            if not (np.isfinite(dx) and np.isfinite(dy)):
+                continue
+            speeds.append(float(np.sqrt(dx * dx + dy * dy) * fps))
+
+        if speeds:
+            sp = np.array(speeds, dtype=float)
+            features["motion_mean"] = float(np.mean(sp))
+            features["motion_std"] = float(np.std(sp))
+        else:
+            features["motion_mean"] = 0.0
+            features["motion_std"] = 0.0
+
     return features
 
 
@@ -312,6 +353,15 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
         "mean_quality": np.nan,
         "valid_frame_ratio": np.nan,
     })
+
+    if _get_config_value(config, "features_enabled.geometry", False):
+        features.update({
+            "mouth_open_mean": np.nan,
+            "mouth_open_std": np.nan,
+            "roll_std": np.nan,
+            "motion_mean": np.nan,
+            "motion_std": np.nan,
+        })
 
     return features
 
@@ -352,5 +402,13 @@ def get_feature_names(config: Union[Dict, Any]) -> List[str]:
         "valid_frame_ratio",
     ])
 
-    return feature_names
+    if _get_config_value(config, "features_enabled.geometry", False):
+        feature_names.extend([
+            "mouth_open_mean",
+            "mouth_open_std",
+            "roll_std",
+            "motion_mean",
+            "motion_std",
+        ])
 
+    return feature_names
