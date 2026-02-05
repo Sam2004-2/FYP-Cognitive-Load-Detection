@@ -1,0 +1,17 @@
+{
+  "training_date": "2026-02-05T16:14:02.274442",
+  "model_type": "GradientBoosting",
+  "seed": 42,
+  "video_features": "data/processed/stress_features_10s_geom.csv",
+  "physio_labels": "data/processed/physio_stress_labels.csv",
+  "target": "z01",
+  "target_name": "physio_stress_z01",
+  "baseline_tasks": [
+    "Breathing",
+    "Relax",
+    "Video1"
+  ],
+  "baseline_n_windows": 4,
+  "merge_mode": "overlap",
+  "round_dp": 3
+}
