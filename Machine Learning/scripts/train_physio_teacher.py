@@ -45,21 +45,31 @@ from cle.extract.physio_features import get_physio_feature_names
 # Quality threshold for filtering
 QUALITY_THRESHOLD = 0.5
 
-# Features to use for training (exclude quality metric itself)
+# Validated features from empirical analysis (physio_stress_analysis.json)
+# These features discriminate high vs low stress with p<0.05 and match literature
 PHYSIO_FEATURES = [
-    "hr",
+    "hr",                    # Heart rate - increases with stress (d=0.45)
+    "sdnn",                  # HRV SDNN - decreases with stress (d=-0.32)
+    "scr_amplitude_mean",    # SCR amplitude - increases with stress (d=0.41)
+    "resp_amplitude_mean",   # Respiratory amplitude - increases with stress (d=0.62)
+]
+
+# Also include secondary features for additional signal (even if direction unexpected)
+SECONDARY_FEATURES = [
     "rmssd",
-    "sdnn",
     "scl",
     "scr_count",
-    "scr_amplitude_mean",
     "resp_rate",
-    "resp_amplitude_mean",
     "resp_variability",
 ]
 
-# Tasks to include (matching video training)
-TASK_FILTER = {"Math", "Counting1", "Counting2", "Speaking"}
+# All features to load (validated + secondary)
+ALL_PHYSIO_FEATURES = PHYSIO_FEATURES + SECONDARY_FEATURES
+
+# Tasks for binary classification - HIGH vs LOW stress contrast
+HIGH_STRESS_TASKS = {"Math", "Speaking", "Stroop", "Counting1", "Counting2", "Counting3"}
+LOW_STRESS_TASKS = {"Relax", "Baseline", "Breathing"}
+TASK_FILTER = HIGH_STRESS_TASKS | LOW_STRESS_TASKS  # Use both for proper contrast
 
 
 def load_physio_features(physio_path: Path) -> pd.DataFrame:
@@ -90,6 +100,7 @@ def prepare_teacher_data(
     labels_df: pd.DataFrame,
     quality_threshold: float = QUALITY_THRESHOLD,
     tasks: set = TASK_FILTER,
+    use_task_based_labels: bool = True,
 ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
     """
     Prepare data for teacher model training.
@@ -99,6 +110,7 @@ def prepare_teacher_data(
         labels_df: Labels DataFrame with subject, task, load_0_1
         quality_threshold: Minimum ECG quality to include
         tasks: Set of tasks to include
+        use_task_based_labels: If True, use task type (high/low) for labels instead of median split
         
     Returns:
         Tuple of (merged_df, X, y_binary, groups)
@@ -115,9 +127,12 @@ def prepare_teacher_data(
         physio_df = physio_df[physio_df["task"].isin(tasks)].copy()
         print(f"Task filter: {len(physio_df)} windows for tasks {tasks}")
     
+    # Use all features for loading, but training may use subset
+    feature_cols = [f for f in ALL_PHYSIO_FEATURES if f in physio_df.columns]
+    
     # Aggregate physio features to task level (mean across windows)
     # This matches the task-level labels
-    physio_task = physio_df.groupby(["user_id", "task"])[PHYSIO_FEATURES].mean().reset_index()
+    physio_task = physio_df.groupby(["user_id", "task"])[feature_cols].mean().reset_index()
     print(f"Aggregated to {len(physio_task)} task-level entries")
     
     # Merge with labels
@@ -132,15 +147,25 @@ def prepare_teacher_data(
     if len(merged) == 0:
         raise ValueError("No data after merging physio features with labels!")
     
-    # Extract features
-    X = merged[PHYSIO_FEATURES].values
+    # Extract features (use validated features primarily)
+    available_features = [f for f in PHYSIO_FEATURES if f in merged.columns]
+    X = merged[available_features].values
+    print(f"Using {len(available_features)} validated features: {available_features}")
     
-    # Create binary labels (low/high stress)
-    # Using median split for balanced classes
-    threshold = merged["load_0_1"].median()
-    y_binary = (merged["load_0_1"] >= threshold).astype(int)
-    print(f"Binary label threshold: {threshold:.3f}")
-    print(f"Class distribution: {np.bincount(y_binary)}")
+    # Create binary labels
+    if use_task_based_labels:
+        # Task-based labels: high-stress tasks = 1, low-stress tasks = 0
+        y_binary = merged["task"].apply(
+            lambda t: 1 if t in HIGH_STRESS_TASKS else 0
+        ).values
+        print(f"Task-based labels: HIGH={HIGH_STRESS_TASKS}, LOW={LOW_STRESS_TASKS}")
+    else:
+        # Median split for balanced classes
+        threshold = merged["load_0_1"].median()
+        y_binary = (merged["load_0_1"] >= threshold).astype(int)
+        print(f"Median-split labels: threshold={threshold:.3f}")
+    
+    print(f"Class distribution: 0={np.sum(y_binary==0)}, 1={np.sum(y_binary==1)}")
     
     # Groups for cross-validation
     label_encoder = LabelEncoder()

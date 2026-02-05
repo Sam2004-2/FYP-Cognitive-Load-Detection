@@ -421,3 +421,87 @@ def get_physio_feature_names() -> List[str]:
         "resp_variability",
         "ecg_quality",
     ]
+
+
+# Validated features from empirical analysis (physio_stress_analysis.json)
+# These discriminate high vs low stress with p<0.05 and match literature
+VALIDATED_FEATURES = ["hr", "sdnn", "scr_amplitude_mean", "resp_amplitude_mean"]
+
+# Effect sizes (Cohen's d) from analysis - used as weights
+# Positive = higher value means more stress
+FEATURE_WEIGHTS = {
+    "hr": 0.452,                # Positive: HR increases with stress
+    "sdnn": -0.320,             # Negative: SDNN decreases with stress
+    "scr_amplitude_mean": 0.405,  # Positive: SCR amplitude increases with stress
+    "resp_amplitude_mean": 0.623, # Positive: Respiratory amplitude increases with stress
+}
+
+
+def compute_physio_stress_score(
+    df: pd.DataFrame,
+    features: List[str] = None,
+    weights: Dict[str, float] = None,
+) -> np.ndarray:
+    """
+    Compute a composite physiological stress score for each window.
+    
+    The score is computed by:
+    1. Z-score normalizing each feature across the dataset
+    2. Flipping direction for features that decrease with stress (negative weights)
+    3. Computing weighted sum based on effect sizes
+    4. Scaling to 0-1 range using sigmoid-like transformation
+    
+    Args:
+        df: DataFrame with physiological features (one row per window)
+        features: List of feature columns to use (default: VALIDATED_FEATURES)
+        weights: Dict of feature weights (default: FEATURE_WEIGHTS)
+        
+    Returns:
+        Array of stress scores (0-1 range) for each window
+    """
+    if features is None:
+        features = VALIDATED_FEATURES
+    if weights is None:
+        weights = FEATURE_WEIGHTS
+    
+    # Filter to available features
+    available = [f for f in features if f in df.columns]
+    if not available:
+        return np.full(len(df), np.nan)
+    
+    # Z-score normalize each feature
+    z_scores = {}
+    for feat in available:
+        values = df[feat].values.astype(float)
+        mean_val = np.nanmean(values)
+        std_val = np.nanstd(values)
+        
+        if std_val > 1e-6:
+            z_scores[feat] = (values - mean_val) / std_val
+        else:
+            z_scores[feat] = np.zeros_like(values)
+    
+    # Compute weighted sum
+    # Positive weights: higher value = more stress (keep direction)
+    # Negative weights: lower value = more stress (flip direction)
+    weighted_sum = np.zeros(len(df))
+    total_weight = 0
+    
+    for feat in available:
+        w = weights.get(feat, 1.0)
+        # Weight sign indicates direction; use absolute for magnitude
+        # If w < 0, feature decreases with stress, so we flip it
+        if w < 0:
+            weighted_sum += -z_scores[feat] * abs(w)
+        else:
+            weighted_sum += z_scores[feat] * abs(w)
+        total_weight += abs(w)
+    
+    if total_weight > 0:
+        weighted_sum /= total_weight
+    
+    # Scale to 0-1 using sigmoid transformation
+    # z=0 maps to 0.5, z=-3 maps to ~0.05, z=+3 maps to ~0.95
+    stress_score = 1 / (1 + np.exp(-weighted_sum))
+    
+    return stress_score
