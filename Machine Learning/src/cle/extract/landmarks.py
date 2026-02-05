@@ -6,6 +6,12 @@ Extracts 468 facial landmarks with iris landmarks for eye tracking.
 
 from typing import Dict, List, Optional, Tuple
 
+import os
+
+# Headless/CI environments (and some macOS setups) can fail to create an OpenGL context.
+# Force MediaPipe to use CPU-only graph execution by default.
+os.environ.setdefault("MEDIAPIPE_DISABLE_GPU", "1")
+
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -168,4 +174,3 @@ class FaceMeshExtractor:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
-
