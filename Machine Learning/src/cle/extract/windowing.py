@@ -120,6 +120,10 @@ def interpolate_gaps(frame_features: List[Dict], max_gap: int = 3) -> List[Dict]
                 "pupil_right",
                 "pupil_mean",
                 "brightness",
+                "eye_center_x",
+                "eye_center_y",
+                "mouth_mar",
+                "roll",
             ]
 
             for gap_idx in range(1, gap + 1):
@@ -260,4 +264,3 @@ def compute_window_stats(values: np.ndarray) -> Dict[str, float]:
         "max": float(np.max(values)),
         "median": float(np.median(values)),
     }
-

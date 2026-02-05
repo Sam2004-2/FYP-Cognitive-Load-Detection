@@ -67,6 +67,48 @@ def test_feature_names_consistency():
         assert expected in feature_names, f"Missing feature: {expected}"
 
 
+def test_feature_names_with_geometry_enabled():
+    """Test that geometry features are appended when enabled."""
+    config_dict = {
+        "seed": 42,
+        "windows": {"length_s": 20.0, "step_s": 5.0},
+        "quality": {"min_face_conf": 0.5, "max_bad_frame_ratio": 0.2},
+        "blink": {"ear_thresh": 0.21, "min_blink_ms": 120, "max_blink_ms": 400},
+        "tepr": {"baseline_s": 10.0, "min_baseline_samples": 150},
+        "features_enabled": {
+            "tepr": False,  # TEPR disabled
+            "blinks": True,
+            "perclos": True,
+            "brightness": True,
+            "geometry": True,
+            "fix_sac": False,
+            "gaze_entropy": False,
+        },
+        "model": {"type": "logreg", "calibration": "platt"},
+    }
+
+    feature_names = get_feature_names(config_dict)
+
+    expected = [
+        "blink_rate",
+        "blink_count",
+        "mean_blink_duration",
+        "ear_std",
+        "mean_brightness",
+        "std_brightness",
+        "perclos",
+        "mean_quality",
+        "valid_frame_ratio",
+        "mouth_open_mean",
+        "mouth_open_std",
+        "roll_std",
+        "motion_mean",
+        "motion_std",
+    ]
+
+    assert feature_names == expected
+
+
 def test_feature_order_consistency():
     """Test that feature order is consistent."""
     config_dict = {
@@ -178,4 +220,3 @@ def test_end_to_end_pipeline():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
