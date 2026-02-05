@@ -29,21 +29,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 # Quality threshold (must match teacher training)
 QUALITY_THRESHOLD = 0.5
 
-# Physiological features used by teacher
+# Validated physiological features used by teacher (from empirical analysis)
 PHYSIO_FEATURES = [
     "hr",
-    "rmssd",
     "sdnn",
-    "scl",
-    "scr_count",
     "scr_amplitude_mean",
-    "resp_rate",
     "resp_amplitude_mean",
-    "resp_variability",
 ]
 
-# Tasks to include
-TASK_FILTER = {"Math", "Counting1", "Counting2", "Speaking"}
+# Tasks for which we have trained teacher (both high and low stress)
+HIGH_STRESS_TASKS = {"Math", "Speaking", "Stroop", "Counting1", "Counting2", "Counting3"}
+LOW_STRESS_TASKS = {"Relax", "Baseline", "Breathing"}
+TASK_FILTER = HIGH_STRESS_TASKS | LOW_STRESS_TASKS
 
 
 def load_teacher_artifacts(model_dir: Path) -> Tuple:
@@ -223,7 +220,7 @@ def main():
     parser.add_argument(
         "--video-features",
         type=Path,
-        default=Path(__file__).parent.parent / "data" / "processed" / "features.csv",
+        default=Path(__file__).parent.parent / "data" / "processed" / "stress_features.csv",
         help="Path to video features CSV",
     )
     parser.add_argument(
