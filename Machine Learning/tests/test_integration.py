@@ -19,7 +19,7 @@ def test_config_loading():
     config = Config.default()
 
     assert config.get("seed") == 42
-    assert config.get("windows.length_s") == 20.0
+    assert config.get("windows.length_s") == 10.0
     assert config.get("blink.ear_thresh") == 0.21
 
     # Test validation
