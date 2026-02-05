@@ -18,6 +18,14 @@ export interface FrameFeatures {
   brightness: number;
   /** Detection quality score (0-1) */
   quality: number;
+  /** Eye center X (midpoint of outer eye corners, normalized 0-1) */
+  eye_center_x: number;
+  /** Eye center Y (midpoint of outer eye corners, normalized 0-1) */
+  eye_center_y: number;
+  /** Mouth aspect ratio (MAR): lip distance / mouth width */
+  mouth_mar: number;
+  /** Head roll proxy (radians) from outer eye corner line angle */
+  roll: number;
   /** Whether this frame has valid features */
   valid: boolean;
 }
@@ -45,6 +53,16 @@ export interface WindowFeatures {
   mean_quality: number;
   /** Ratio of valid frames in window (0-1) */
   valid_frame_ratio: number;
+  /** Mean mouth openness (MAR) */
+  mouth_open_mean: number;
+  /** Standard deviation of mouth openness (MAR) */
+  mouth_open_std: number;
+  /** Standard deviation of head roll proxy (radians) */
+  roll_std: number;
+  /** Mean motion speed from eye center (normalized units/s) */
+  motion_mean: number;
+  /** Standard deviation of motion speed */
+  motion_std: number;
 }
 
 /**
@@ -106,4 +124,3 @@ export interface HealthStatus {
   /** Number of features */
   feature_count?: number;
 }
-

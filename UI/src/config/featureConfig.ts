@@ -76,6 +76,12 @@ export const LANDMARK_INDICES = {
   LEFT_EYE_OUTER: 33,
   RIGHT_EYE_INNER: 362,
   RIGHT_EYE_OUTER: 263,
+  /** Mouth landmarks for mouth aspect ratio (MAR) ***
+   *  Used as a proxy for talking/effort and mouth openness variability */
+  MOUTH_LEFT: 61,
+  MOUTH_RIGHT: 291,
+  MOUTH_UPPER: 13,
+  MOUTH_LOWER: 14,
 } as const;
 
 /** Feature names in the EXACT order expected by the ML model ***
@@ -92,5 +98,9 @@ export const FEATURE_NAMES = [
   'perclos',             // Percentage of Eye Closure (fatigue indicator) ***
   'mean_quality',        // Average detection confidence ***
   'valid_frame_ratio',   // Fraction of usable frames ***
+  'mouth_open_mean',     // Mean mouth openness (MAR) ***
+  'mouth_open_std',      // Mouth openness variability (MAR std) ***
+  'roll_std',            // Head roll variability (radians std) ***
+  'motion_mean',         // Mean eye-center motion speed (norm units/s) ***
+  'motion_std',          // Motion speed variability ***
 ] as const;
-
