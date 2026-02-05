@@ -28,7 +28,8 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
   const mediaPipeRef = useRef<MediaPipeManager | null>(null);   // MediaPipe instance ***
   const animationFrameRef = useRef<number | null>(null);        // RAF handle for cleanup ***
   const streamRef = useRef<MediaStream | null>(null);           // Camera stream for cleanup ***
-  const lastFrameTimeRef = useRef<number>(0);                   // FPS calculation tracking ***
+  const lastFrameTimeRef = useRef<number>(0);                   // Last processed frame time (ms) for throttling ***
+  const lastVideoTimeRef = useRef<number>(-1);                  // Last processed video.currentTime (s) ***
   const frameCountRef = useRef<number>(0);                      // Frame counter for FPS ***
   const fpsUpdateIntervalRef = useRef<number>(0);               // Last FPS update time ***
 
@@ -71,6 +72,20 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
       animationFrameRef.current = requestAnimationFrame(processFrame);
       return;
     }
+
+    // Throttle processing to target FPS to avoid over-sampling the same video frame
+    const nowMs = performance.now();
+    const minIntervalMs = 1000 / FEATURE_CONFIG.video.fps;
+    if (nowMs - lastFrameTimeRef.current < minIntervalMs) {
+      animationFrameRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+    if (video.currentTime === lastVideoTimeRef.current) {
+      animationFrameRef.current = requestAnimationFrame(processFrame);
+      return;
+    }
+    lastFrameTimeRef.current = nowMs;
+    lastVideoTimeRef.current = video.currentTime;
 
     try {
       setIsProcessing(true);
@@ -180,6 +195,8 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
       console.log('Video ready, starting frame processing');
       frameCountRef.current = 0;
       fpsUpdateIntervalRef.current = performance.now();
+      lastFrameTimeRef.current = 0;
+      lastVideoTimeRef.current = -1;
       processFrame();
     };
 
@@ -245,4 +262,3 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
 };
 
 export default WebcamFeed;
-

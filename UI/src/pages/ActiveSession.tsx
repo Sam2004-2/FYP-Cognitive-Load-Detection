@@ -7,6 +7,7 @@ import TaskPanel from '../components/tasks/TaskPanel';
 import { CognitiveLoadData } from '../types';
 import { WindowBuffer, validateWindowQuality } from '../services/windowBuffer';
 import { computeWindowFeatures } from '../services/featureExtraction';
+import { computeBaseline, engineerFeatures } from '../services/featureEngineering';
 import { predictCognitiveLoad, testConnection } from '../services/apiClient';
 import { FrameFeatures, WindowFeatures } from '../types/features';
 import { FEATURE_CONFIG } from '../config/featureConfig';
@@ -22,6 +23,7 @@ const ActiveSession: React.FC = () => {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [lastPredictionTime, setLastPredictionTime] = useState<number>(0);
   const [confidence, setConfidence] = useState<number>(0);
+  const [isCalibrated, setIsCalibrated] = useState<boolean>(false);
   
   // Live feature display state
   const [currentFrameFeatures, setCurrentFrameFeatures] = useState<FrameFeatures | null>(null);
@@ -46,6 +48,9 @@ const ActiveSession: React.FC = () => {
   const showInterventionRef = useRef(showIntervention);
   const lastPredictionTimeRef = useRef(lastPredictionTime);
   const isPausedRef = useRef(isPaused);
+  const baselineRef = useRef<Record<string, number> | null>(null);
+  const baselineSamplesRef = useRef<WindowFeatures[]>([]);
+  const prevCenteredRef = useRef<Record<string, number> | null>(null);
 
   // These effects update refs whenever state changes - refs always have current value ***
   useEffect(() => { currentLoadRef.current = currentLoad; }, [currentLoad]);
@@ -96,13 +101,38 @@ const ActiveSession: React.FC = () => {
       // Compute window features
       const windowFeatures = computeWindowFeatures(windowData, FEATURE_CONFIG.video.fps);
 
+      // Calibration: build per-session baseline from first N windows
+      if (!baselineRef.current) {
+        baselineSamplesRef.current.push(windowFeatures);
+        if (baselineSamplesRef.current.length >= 4) {
+          const lastSamples = baselineSamplesRef.current.slice(-4);
+          baselineRef.current = computeBaseline(lastSamples);
+          prevCenteredRef.current = null;
+          setIsCalibrated(true);
+          console.log('Calibration complete (baseline established)');
+        } else {
+          console.log(`Calibrating... (${baselineSamplesRef.current.length}/4 windows)`);
+        }
+        return;
+      }
+
+      // Engineer 27-feature map (base + centered + delta)
+      const engineered = engineerFeatures(
+        windowFeatures,
+        baselineRef.current,
+        prevCenteredRef.current
+      );
+      prevCenteredRef.current = engineered.nextPrevCentered;
+
       // Send to backend for prediction
-      const result = await predictCognitiveLoad(windowFeatures);
+      const result = await predictCognitiveLoad(engineered.featureMap);
 
       if (result.success) {
         // EWMA (Exponential Weighted Moving Average) smooths jittery predictions ***
         // alpha=0.4: new prediction has 40% weight, history has 60% weight ***
-        const alpha = FEATURE_CONFIG.realtime.smoothing_alpha;
+        const alphaMax = FEATURE_CONFIG.realtime.smoothing_alpha;
+        const alphaMin = 0.15;
+        const alpha = alphaMin + (alphaMax - alphaMin) * result.confidence;
         const smoothedLoad = alpha * result.cli + (1 - alpha) * currentLoadRef.current;
 
         setCurrentLoad(smoothedLoad);
@@ -229,6 +259,13 @@ const ActiveSession: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Calibration indicator */}
+              {backendStatus === 'connected' && (
+                <div className="text-xs text-gray-600">
+                  {isCalibrated ? 'Calibrated' : 'Calibrating...'}
+                </div>
+              )}
 
               {/* Confidence indicator */}
               {confidence > 0 && (
