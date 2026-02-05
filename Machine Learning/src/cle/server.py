@@ -124,7 +124,7 @@ async def startup_event():
         sys.exit(1)
 
     # Load model artifacts from models directory (env override supported)
-    models_dir_str = os.environ.get("CLE_MODELS_DIR", "models/video_physio_regression")
+    models_dir_str = os.environ.get("CLE_MODELS_DIR", "models/video_physio_regression_z01_geom")
     models_dir = Path(models_dir_str)
     if not models_dir.exists():
         legacy_dir = Path("models/stress_classifier_rf")

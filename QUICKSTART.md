@@ -8,16 +8,17 @@ Get the cognitive load estimation system running in 5 minutes.
 cd "Machine Learning"
 
 # Install dependencies (first time only)
-pip install -r requirements.txt
+python3 -m pip install -e ".[dev]"
 
-# Start server
-python3 -m src.cle.server --host 0.0.0.0 --port 8000
+# Start server (best physio-aligned regression model)
+python3 -m src.cle.server --host 0.0.0.0 --port 8000 \
+  --models-dir models/video_physio_regression_z01_geom
 ```
 
 Expected output:
 ```
 INFO: Starting Cognitive Load Estimation API
-INFO: Loaded model artifacts with 9 features
+INFO: Loaded model artifacts with 42 features (regression, ...)
 INFO: API ready to accept requests
 ```
 
@@ -41,7 +42,7 @@ Browser will open at `http://localhost:3000`
 2. Allow camera access when prompted
 3. Wait for green "Face detected" indicator
 4. Wait ~10 seconds for buffer to fill
-5. Watch cognitive load predictions update every 2.5 seconds
+5. Wait ~17.5 seconds for calibration; then predictions update every 2.5 seconds
 
 ## Verification Checklist
 
@@ -102,21 +103,9 @@ Use the Data Collection mode to collect labeled training data for improving your
    - **Hard tasks**: High difficulty → HIGH label
 5. Click **"Finish Collection"** when done
 6. Export data:
-   - **CSV**: Download for training with `python -m src.cle.train.train`
-   - **JSON**: Full data with metadata
+   - **CSV**: Window features + labels
+   - **JSON**: Full session data with metadata
    - **Server**: Save directly to `data/collected/` (if backend running)
-
-### Training with Collected Data
-
-```bash
-cd "Machine Learning"
-
-# Combine collected data (if multiple sessions)
-cat data/collected/*.csv > data/processed/combined_training.csv
-
-# Train new model
-python -m src.cle.train.train --features data/processed/combined_training.csv
-```
 
 ## Next Steps
 
@@ -154,4 +143,3 @@ curl http://localhost:8000/health
 You now have a working real-time cognitive load estimation system! 🎉
 
 The system continuously monitors your cognitive state and can trigger interventions when load is high.
-
