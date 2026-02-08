@@ -40,6 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.cle.data.alignment import overlap_weighted_label_video_windows  # noqa: E402
 from src.cle.train.feature_engineering import (  # noqa: E402
     DEFAULT_BASELINE_TASKS,
     add_centered_and_delta,
@@ -52,14 +53,12 @@ BASE_VIDEO_FEATURES: List[str] = [
     "blink_count",
     "mean_blink_duration",
     "ear_std",
-    "mean_brightness",
-    "std_brightness",
     "perclos",
-    "mean_quality",
-    "valid_frame_ratio",
     "mouth_open_mean",
     "mouth_open_std",
     "roll_std",
+    "pitch_std",
+    "yaw_std",
     "motion_mean",
     "motion_std",
 ]
@@ -78,92 +77,6 @@ def load_binary_stress_labels(labels_path: Path) -> pd.DataFrame:
     df = pd.read_csv(labels_path)
     df[["user_id", "task"]] = df["subject/task"].str.split("_", n=1, expand=True)
     return df[["user_id", "task", "binary-stress"]].rename(columns={"binary-stress": "binary_stress"})
-
-
-def label_video_windows_overlap(
-    video_df: pd.DataFrame,
-    physio_df: pd.DataFrame,
-    *,
-    user_col: str = "user_id",
-    task_col: str = "task",
-    v_start_col: str = "t_start_s",
-    v_end_col: str = "t_end_s",
-    p_start_col: str = "t_start_s",
-    p_end_col: str = "t_end_s",
-    score_col: str = "physio_stress_score",
-) -> pd.DataFrame:
-    """
-    Assign physio_stress_score to each video window by overlap-weighted averaging.
-
-    For each (user_id, task):
-      - For each video window [vs, ve], consider physio windows overlapping it.
-      - Compute overlap durations and return weighted mean of physio_stress_score.
-      - If there is no overlap, fall back to nearest physio window by center time.
-    """
-    required_video = {user_col, task_col, v_start_col, v_end_col}
-    missing_video = required_video - set(video_df.columns)
-    if missing_video:
-        raise ValueError(f"video_df missing required columns: {sorted(missing_video)}")
-
-    required_physio = {user_col, task_col, p_start_col, p_end_col, score_col}
-    missing_physio = required_physio - set(physio_df.columns)
-    if missing_physio:
-        raise ValueError(f"physio_df missing required columns: {sorted(missing_physio)}")
-
-    v = video_df.copy()
-    p = physio_df.copy()
-    v[user_col] = v[user_col].astype(str)
-    v[task_col] = v[task_col].astype(str)
-    p[user_col] = p[user_col].astype(str)
-    p[task_col] = p[task_col].astype(str)
-
-    physio_groups = {k: g for k, g in p.groupby([user_col, task_col], sort=False)}
-
-    labeled_groups: List[pd.DataFrame] = []
-    for (user_id, task), vg in v.groupby([user_col, task_col], sort=False):
-        pg = physio_groups.get((user_id, task))
-        vg_out = vg.copy()
-
-        if pg is None or len(pg) == 0:
-            vg_out[score_col] = np.nan
-            labeled_groups.append(vg_out)
-            continue
-
-        pg = pg[[p_start_col, p_end_col, score_col]].dropna(subset=[score_col]).copy()
-        if len(pg) == 0:
-            vg_out[score_col] = np.nan
-            labeled_groups.append(vg_out)
-            continue
-
-        pg = pg.sort_values(p_start_col, ascending=True)
-        p_start = pg[p_start_col].values.astype(float)
-        p_end = pg[p_end_col].values.astype(float)
-        p_score = pg[score_col].values.astype(float)
-        p_center = (p_start + p_end) / 2.0
-
-        labels: List[float] = []
-        for vs, ve in vg_out[[v_start_col, v_end_col]].values.astype(float):
-            left = int(np.searchsorted(p_end, vs, side="right"))  # first p_end > vs
-            right = int(np.searchsorted(p_start, ve, side="left"))  # first p_start >= ve
-
-            if left < right:
-                ps = p_start[left:right]
-                pe = p_end[left:right]
-                sc = p_score[left:right]
-                overlap = np.maximum(0.0, np.minimum(ve, pe) - np.maximum(vs, ps))
-                total = float(overlap.sum())
-                if total > 0:
-                    labels.append(float((overlap * sc).sum() / total))
-                    continue
-
-            v_center = (vs + ve) / 2.0
-            idx = int(np.argmin(np.abs(p_center - v_center)))
-            labels.append(float(p_score[idx]))
-
-        vg_out[score_col] = labels
-        labeled_groups.append(vg_out)
-
-    return pd.concat(labeled_groups, ignore_index=True)
 
 
 def _tuned_threshold_accuracy_cv(
@@ -359,7 +272,7 @@ def main() -> int:
     labels_df["user_id"] = labels_df["user_id"].astype(str)
     labels_df["task"] = labels_df["task"].astype(str)
 
-    labeled = label_video_windows_overlap(video_df, physio_df)
+    labeled = overlap_weighted_label_video_windows(video_df, physio_df)
     labeled = labeled.dropna(subset=["physio_stress_score"]).copy()
     if len(labeled) == 0:
         raise ValueError("No labeled rows after overlap labeling.")

@@ -17,7 +17,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.cle.data.alignment import (
+    exact_join_video_physio,
+    overlap_weighted_label_video_windows,
+)
 from src.cle.train.feature_engineering import (
     DEFAULT_BASELINE_TASKS,
     add_centered_and_delta,
@@ -47,14 +51,12 @@ BASE_VIDEO_FEATURES = [
     "blink_count",
     "mean_blink_duration",
     "ear_std",
-    "mean_brightness",
-    "std_brightness",
     "perclos",
-    "mean_quality",
-    "valid_frame_ratio",
     "mouth_open_mean",
     "mouth_open_std",
     "roll_std",
+    "pitch_std",
+    "yaw_std",
     "motion_mean",
     "motion_std",
 ]
@@ -150,116 +152,6 @@ def evaluate_model_cv(
     }
 
 
-def _exact_join_video_physio(
-    video_df: pd.DataFrame,
-    physio_df: pd.DataFrame,
-    *,
-    round_dp: int,
-) -> pd.DataFrame:
-    v = video_df.copy()
-    p = physio_df.copy()
-    for df in (v, p):
-        df["t_start_s_rounded"] = df["t_start_s"].round(round_dp)
-
-    physio_keep = p[["user_id", "task", "t_start_s_rounded", "physio_stress_score"]].copy()
-    merged = v.merge(
-        physio_keep,
-        on=["user_id", "task", "t_start_s_rounded"],
-        how="inner",
-    )
-    return merged
-
-
-def _overlap_weighted_label_video_windows(
-    video_df: pd.DataFrame,
-    physio_df: pd.DataFrame,
-    *,
-    user_col: str = "user_id",
-    task_col: str = "task",
-    v_start_col: str = "t_start_s",
-    v_end_col: str = "t_end_s",
-    p_start_col: str = "t_start_s",
-    p_end_col: str = "t_end_s",
-    score_col: str = "physio_stress_score",
-) -> pd.DataFrame:
-    """
-    Assign a physio label to each video window by overlap-weighted averaging.
-
-    For each (user_id, task):
-      - For each video window [vs, ve], consider physio windows overlapping it.
-      - Compute overlap durations and return weighted mean of physio_stress_score.
-      - If there is no overlap, fall back to nearest physio window by center time.
-    """
-    required_video = {user_col, task_col, v_start_col, v_end_col}
-    missing_video = required_video - set(video_df.columns)
-    if missing_video:
-        raise ValueError(f"video_df missing required columns: {sorted(missing_video)}")
-
-    required_physio = {user_col, task_col, p_start_col, p_end_col, score_col}
-    missing_physio = required_physio - set(physio_df.columns)
-    if missing_physio:
-        raise ValueError(f"physio_df missing required columns: {sorted(missing_physio)}")
-
-    v = video_df.copy()
-    p = physio_df.copy()
-    v[user_col] = v[user_col].astype(str)
-    v[task_col] = v[task_col].astype(str)
-    p[user_col] = p[user_col].astype(str)
-    p[task_col] = p[task_col].astype(str)
-
-    # Pre-group physio for efficient lookup.
-    physio_groups = {k: g for k, g in p.groupby([user_col, task_col], sort=False)}
-
-    labeled_groups: List[pd.DataFrame] = []
-    for (user_id, task), vg in v.groupby([user_col, task_col], sort=False):
-        pg = physio_groups.get((user_id, task))
-        vg_out = vg.copy()
-
-        if pg is None or len(pg) == 0:
-            vg_out[score_col] = np.nan
-            labeled_groups.append(vg_out)
-            continue
-
-        pg = pg[[p_start_col, p_end_col, score_col]].dropna(subset=[score_col]).copy()
-        if len(pg) == 0:
-            vg_out[score_col] = np.nan
-            labeled_groups.append(vg_out)
-            continue
-
-        # Sort physio windows by start time (also keeps end times monotonic).
-        pg = pg.sort_values(p_start_col, ascending=True)
-        p_start = pg[p_start_col].values.astype(float)
-        p_end = pg[p_end_col].values.astype(float)
-        p_score = pg[score_col].values.astype(float)
-        p_center = (p_start + p_end) / 2.0
-
-        labels: List[float] = []
-        for vs, ve in vg_out[[v_start_col, v_end_col]].values.astype(float):
-            # Overlap condition: p_start < ve and p_end > vs
-            left = int(np.searchsorted(p_end, vs, side="right"))  # first p_end > vs
-            right = int(np.searchsorted(p_start, ve, side="left"))  # first p_start >= ve
-
-            if left < right:
-                ps = p_start[left:right]
-                pe = p_end[left:right]
-                sc = p_score[left:right]
-                overlap = np.maximum(0.0, np.minimum(ve, pe) - np.maximum(vs, ps))
-                total = float(overlap.sum())
-                if total > 0:
-                    labels.append(float((overlap * sc).sum() / total))
-                    continue
-
-            # Fallback: nearest physio window by center time
-            v_center = (vs + ve) / 2.0
-            idx = int(np.argmin(np.abs(p_center - v_center)))
-            labels.append(float(p_score[idx]))
-
-        vg_out[score_col] = labels
-        labeled_groups.append(vg_out)
-
-    return pd.concat(labeled_groups, ignore_index=True)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train video regression model on physio_stress_score")
     parser.add_argument(
@@ -330,21 +222,21 @@ def main() -> int:
 
     merged: pd.DataFrame
     if args.merge_mode in ("exact", "auto"):
-        merged_exact = _exact_join_video_physio(video_df, physio_df, round_dp=args.round_dp)
+        merged_exact = exact_join_video_physio(video_df, physio_df, round_dp=args.round_dp)
     else:
         merged_exact = pd.DataFrame()
 
     if args.merge_mode == "exact":
         merged = merged_exact
     elif args.merge_mode == "overlap":
-        merged = _overlap_weighted_label_video_windows(video_df, physio_df)
+        merged = overlap_weighted_label_video_windows(video_df, physio_df)
     else:
         # auto: prefer exact join if it captures most windows; otherwise use overlap labeling
         exact_ratio = (len(merged_exact) / max(len(video_df), 1)) if len(video_df) else 0.0
         if len(merged_exact) > 0 and exact_ratio >= 0.8:
             merged = merged_exact
         else:
-            merged = _overlap_weighted_label_video_windows(video_df, physio_df)
+            merged = overlap_weighted_label_video_windows(video_df, physio_df)
 
     merged = merged.dropna(subset=["physio_stress_score"]).copy()
     if len(merged) == 0:
