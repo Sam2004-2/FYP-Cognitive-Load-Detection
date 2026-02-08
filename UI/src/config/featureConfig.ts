@@ -82,25 +82,32 @@ export const LANDMARK_INDICES = {
   MOUTH_RIGHT: 291,
   MOUTH_UPPER: 13,
   MOUTH_LOWER: 14,
+  /** Head pose landmarks - used for pitch and yaw estimation */
+  NOSE_TIP: 4,
+  FOREHEAD: 10,
+  CHIN: 152,
+  LEFT_EAR_TRAGION: 234,
+  RIGHT_EAR_TRAGION: 454,
 } as const;
 
 /** Feature names in the EXACT order expected by the ML model ***
  *  CRITICAL: This order must match feature_spec.json in the backend ***
  *  Changing order will cause model to produce incorrect predictions ***
+ *
+ *  NOTE: brightness and quality metrics are still *computed* for monitoring
+ *  but are excluded from the model feature set to avoid confounding.
  */
 export const FEATURE_NAMES = [
   'blink_rate',          // Blinks per minute ***
   'blink_count',         // Total blinks in window ***
   'mean_blink_duration', // Average blink length in ms ***
   'ear_std',             // Eye Aspect Ratio variability ***
-  'mean_brightness',     // Average face region brightness ***
-  'std_brightness',      // Brightness variability ***
   'perclos',             // Percentage of Eye Closure (fatigue indicator) ***
-  'mean_quality',        // Average detection confidence ***
-  'valid_frame_ratio',   // Fraction of usable frames ***
   'mouth_open_mean',     // Mean mouth openness (MAR) ***
   'mouth_open_std',      // Mouth openness variability (MAR std) ***
   'roll_std',            // Head roll variability (radians std) ***
+  'pitch_std',           // Head pitch variability (radians std) ***
+  'yaw_std',             // Head yaw variability (radians std) ***
   'motion_mean',         // Mean eye-center motion speed (norm units/s) ***
   'motion_std',          // Motion speed variability ***
 ] as const;

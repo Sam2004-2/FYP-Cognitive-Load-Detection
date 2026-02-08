@@ -242,7 +242,8 @@ const DataCollection: React.FC = () => {
     // Build CSV header
     const featureNames = [
       'blink_rate', 'blink_count', 'mean_blink_duration', 'ear_std',
-      'mean_brightness', 'std_brightness', 'perclos', 'mean_quality', 'valid_frame_ratio'
+      'perclos', 'mouth_open_mean', 'mouth_open_std', 'roll_std',
+      'pitch_std', 'yaw_std', 'motion_mean', 'motion_std'
     ];
     
     const headers = [

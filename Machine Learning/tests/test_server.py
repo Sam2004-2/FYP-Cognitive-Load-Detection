@@ -80,11 +80,14 @@ def test_prediction_low_load() -> bool:
         "blink_count": 4.0,
         "mean_blink_duration": 180.0,
         "ear_std": 0.03,  # Low variability
-        "mean_brightness": 120.0,
-        "std_brightness": 8.0,
         "perclos": 0.05,  # Low eye closure
-        "mean_quality": 1.0,
-        "valid_frame_ratio": 0.98,
+        "mouth_open_mean": 0.1,
+        "mouth_open_std": 0.02,
+        "roll_std": 0.01,
+        "pitch_std": 0.01,
+        "yaw_std": 0.01,
+        "motion_mean": 0.05,
+        "motion_std": 0.02,
     }
 
     try:
@@ -134,11 +137,14 @@ def test_prediction_high_load() -> bool:
         "blink_count": 9.0,
         "mean_blink_duration": 250.0,
         "ear_std": 0.08,  # High variability
-        "mean_brightness": 115.0,
-        "std_brightness": 12.0,
         "perclos": 0.25,  # High eye closure
-        "mean_quality": 1.0,
-        "valid_frame_ratio": 0.95,
+        "mouth_open_mean": 0.25,
+        "mouth_open_std": 0.08,
+        "roll_std": 0.04,
+        "pitch_std": 0.04,
+        "yaw_std": 0.03,
+        "motion_mean": 0.15,
+        "motion_std": 0.06,
     }
 
     try:
@@ -185,11 +191,14 @@ def test_invalid_features() -> bool:
         "blink_count": 0.0,
         "mean_blink_duration": 0.0,
         "ear_std": 0.0,
-        "mean_brightness": 100.0,
-        "std_brightness": 5.0,
         "perclos": 0.0,
-        "mean_quality": 0.5,
-        "valid_frame_ratio": 0.5,
+        "mouth_open_mean": 0.0,
+        "mouth_open_std": 0.0,
+        "roll_std": 0.0,
+        "pitch_std": 0.0,
+        "yaw_std": 0.0,
+        "motion_mean": 0.0,
+        "motion_std": 0.0,
     }
 
     try:

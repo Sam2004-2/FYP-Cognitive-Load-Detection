@@ -22,6 +22,13 @@ MOUTH_RIGHT_IDX = 291
 MOUTH_UPPER_IDX = 13
 MOUTH_LOWER_IDX = 14
 
+# Head pose estimation landmarks
+NOSE_TIP_IDX = 4
+FOREHEAD_IDX = 10
+CHIN_IDX = 152
+LEFT_EAR_TRAGION_IDX = 234
+RIGHT_EAR_TRAGION_IDX = 454
+
 
 def euclidean_distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
     """
@@ -134,6 +141,50 @@ def eye_aspect_ratio(eye_coords: np.ndarray) -> float:
     return ear
 
 
+def head_pitch(landmarks: np.ndarray) -> float:
+    """
+    Compute a head pitch proxy (radians) from forehead-to-chin depth angle.
+
+    Uses the z-coordinate difference between forehead (landmark 10) and
+    chin (landmark 152) relative to their vertical separation.
+    Positive values indicate head tilted forward (looking down).
+    """
+    if landmarks is None or len(landmarks) <= max(FOREHEAD_IDX, CHIN_IDX):
+        return 0.0
+
+    forehead = landmarks[FOREHEAD_IDX]
+    chin = landmarks[CHIN_IDX]
+    dy = float(chin[1] - forehead[1])  # vertical (y increases downward in normalised coords)
+    dz = float(chin[2] - forehead[2])  # depth
+
+    if abs(dy) < 1e-6:
+        return 0.0
+    return float(np.arctan2(dz, dy))
+
+
+def head_yaw(landmarks: np.ndarray) -> float:
+    """
+    Compute a head yaw proxy (radians) from nose-to-face-center offset.
+
+    Uses the horizontal offset of the nose tip (landmark 4) from the
+    midpoint between the ear tragion landmarks (234 / 454), normalised
+    by face width.  Positive values indicate head turned to the right.
+    """
+    if landmarks is None or len(landmarks) <= max(NOSE_TIP_IDX, LEFT_EAR_TRAGION_IDX, RIGHT_EAR_TRAGION_IDX):
+        return 0.0
+
+    nose = landmarks[NOSE_TIP_IDX]
+    left = landmarks[LEFT_EAR_TRAGION_IDX]
+    right = landmarks[RIGHT_EAR_TRAGION_IDX]
+
+    mid_x = (float(left[0]) + float(right[0])) / 2.0
+    face_width = abs(float(right[0]) - float(left[0]))
+
+    if face_width < 1e-6:
+        return 0.0
+    return float(np.arctan2(float(nose[0]) - mid_x, face_width / 2.0))
+
+
 # Pupil/iris functions removed - no longer tracking pupil diameter
 # Focus shifted to EAR-based features which are more robust and calibration-free
 
@@ -233,6 +284,8 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
         "eye_center_y": 0.0,
         "mouth_mar": 0.0,
         "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0,
         "valid": False,
     }
 
@@ -255,6 +308,8 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
     eye_center_x, eye_center_y = eye_outer_center(landmarks)
     mouth_mar = mouth_aspect_ratio(landmarks)
     roll = head_roll(landmarks)
+    pitch = head_pitch(landmarks)
+    yaw = head_yaw(landmarks)
 
     return {
         "ear_left": ear_left,
@@ -266,5 +321,7 @@ def extract_frame_features(frame: np.ndarray, landmark_result: Dict) -> Dict:
         "eye_center_y": eye_center_y,
         "mouth_mar": mouth_mar,
         "roll": roll,
+        "pitch": pitch,
+        "yaw": yaw,
         "valid": True,
     }

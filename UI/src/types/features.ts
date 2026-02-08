@@ -26,6 +26,10 @@ export interface FrameFeatures {
   mouth_mar: number;
   /** Head roll proxy (radians) from outer eye corner line angle */
   roll: number;
+  /** Head pitch proxy (radians) from forehead-chin depth angle */
+  pitch: number;
+  /** Head yaw proxy (radians) from nose-to-face-center offset */
+  yaw: number;
   /** Whether this frame has valid features */
   valid: boolean;
 }
@@ -43,26 +47,31 @@ export interface WindowFeatures {
   mean_blink_duration: number;
   /** Standard deviation of EAR values */
   ear_std: number;
-  /** Mean brightness of face region */
-  mean_brightness: number;
-  /** Standard deviation of brightness */
-  std_brightness: number;
   /** Percentage of eye closure (0-1) */
   perclos: number;
-  /** Mean detection quality */
-  mean_quality: number;
-  /** Ratio of valid frames in window (0-1) */
-  valid_frame_ratio: number;
   /** Mean mouth openness (MAR) */
   mouth_open_mean: number;
   /** Standard deviation of mouth openness (MAR) */
   mouth_open_std: number;
   /** Standard deviation of head roll proxy (radians) */
   roll_std: number;
+  /** Standard deviation of head pitch proxy (radians) */
+  pitch_std: number;
+  /** Standard deviation of head yaw proxy (radians) */
+  yaw_std: number;
   /** Mean motion speed from eye center (normalized units/s) */
   motion_mean: number;
   /** Standard deviation of motion speed */
   motion_std: number;
+  // --- Monitoring features (not used as model inputs) ---
+  /** Mean brightness of face region */
+  mean_brightness: number;
+  /** Standard deviation of brightness */
+  std_brightness: number;
+  /** Mean detection quality */
+  mean_quality: number;
+  /** Ratio of valid frames in window (0-1) */
+  valid_frame_ratio: number;
 }
 
 /**

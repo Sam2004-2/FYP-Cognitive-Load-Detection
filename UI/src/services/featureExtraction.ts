@@ -147,6 +147,8 @@ export function extractFrameFeatures(
     eye_center_y: 0.0,
     mouth_mar: 0.0,
     roll: 0.0,
+    pitch: 0.0,
+    yaw: 0.0,
     valid: false,
   };
 
@@ -199,6 +201,23 @@ export function extractFrameFeatures(
     rightEyeOuter.x - leftEyeOuter.x
   );
 
+  // Head pitch: depth angle between forehead (landmark 10) and chin (landmark 152)
+  const forehead = landmarks[LANDMARK_INDICES.FOREHEAD];
+  const chin = landmarks[LANDMARK_INDICES.CHIN];
+  const pitchDy = chin.y - forehead.y; // vertical (y increases downward)
+  const pitchDz = chin.z - forehead.z; // depth
+  const pitch = Math.abs(pitchDy) > 1e-6 ? Math.atan2(pitchDz, pitchDy) : 0.0;
+
+  // Head yaw: nose offset from face center, normalised by face width
+  const noseTip = landmarks[LANDMARK_INDICES.NOSE_TIP];
+  const leftEarTragion = landmarks[LANDMARK_INDICES.LEFT_EAR_TRAGION];
+  const rightEarTragion = landmarks[LANDMARK_INDICES.RIGHT_EAR_TRAGION];
+  const faceMidX = (leftEarTragion.x + rightEarTragion.x) / 2.0;
+  const faceWidth = Math.abs(rightEarTragion.x - leftEarTragion.x);
+  const yaw = faceWidth > 1e-6
+    ? Math.atan2(noseTip.x - faceMidX, faceWidth / 2.0)
+    : 0.0;
+
   return {
     ear_left: earLeft,
     ear_right: earRight,
@@ -209,6 +228,8 @@ export function extractFrameFeatures(
     eye_center_y: eyeCenterY,
     mouth_mar: mouthMar,
     roll,
+    pitch,
+    yaw,
     valid: true,
   };
 }
@@ -378,16 +399,18 @@ export function computeWindowFeatures(
       blink_count: NaN,
       mean_blink_duration: NaN,
       ear_std: NaN,
-      mean_brightness: NaN,
-      std_brightness: NaN,
       perclos: NaN,
-      mean_quality: NaN,
-      valid_frame_ratio: NaN,
       mouth_open_mean: NaN,
       mouth_open_std: NaN,
       roll_std: NaN,
+      pitch_std: NaN,
+      yaw_std: NaN,
       motion_mean: NaN,
       motion_std: NaN,
+      mean_brightness: NaN,
+      std_brightness: NaN,
+      mean_quality: NaN,
+      valid_frame_ratio: NaN,
     };
   }
 
@@ -437,6 +460,30 @@ export function computeWindowFeatures(
       : 0.0;
   const rollStd = Math.sqrt(rollVar);
 
+  // Pitch variability
+  const pitchSeries = validFrames
+    .map((f) => f.pitch)
+    .filter((v) => Number.isFinite(v));
+  const pitchMean =
+    pitchSeries.length > 0 ? pitchSeries.reduce((sum, v) => sum + v, 0) / pitchSeries.length : 0.0;
+  const pitchVar =
+    pitchSeries.length > 0
+      ? pitchSeries.reduce((sum, v) => sum + (v - pitchMean) ** 2, 0) / pitchSeries.length
+      : 0.0;
+  const pitchStd = Math.sqrt(pitchVar);
+
+  // Yaw variability
+  const yawSeries = validFrames
+    .map((f) => f.yaw)
+    .filter((v) => Number.isFinite(v));
+  const yawMean =
+    yawSeries.length > 0 ? yawSeries.reduce((sum, v) => sum + v, 0) / yawSeries.length : 0.0;
+  const yawVar =
+    yawSeries.length > 0
+      ? yawSeries.reduce((sum, v) => sum + (v - yawMean) ** 2, 0) / yawSeries.length
+      : 0.0;
+  const yawStd = Math.sqrt(yawVar);
+
   // Motion features: per-frame speed of the eye center, using only valid consecutive frames
   const speeds: number[] = [];
   for (let i = 1; i < frameData.length; i++) {
@@ -458,19 +505,23 @@ export function computeWindowFeatures(
   const motionStd = Math.sqrt(motionVar);
 
   return {
+    // Model features (order matches FEATURE_NAMES)
     blink_rate: blinkFeatures.blink_rate,
     blink_count: blinkFeatures.blink_count,
     mean_blink_duration: blinkFeatures.mean_blink_duration,
     ear_std: blinkFeatures.ear_std,
-    mean_brightness: meanBrightness,
-    std_brightness: stdBrightness,
     perclos,
-    mean_quality: meanQuality,
-    valid_frame_ratio: validFrameRatio,
     mouth_open_mean: mouthOpenMean,
     mouth_open_std: mouthOpenStd,
     roll_std: rollStd,
+    pitch_std: pitchStd,
+    yaw_std: yawStd,
     motion_mean: motionMean,
     motion_std: motionStd,
+    // Monitoring features (not model inputs, but useful for display/quality)
+    mean_brightness: meanBrightness,
+    std_brightness: stdBrightness,
+    mean_quality: meanQuality,
+    valid_frame_ratio: validFrameRatio,
   };
 }

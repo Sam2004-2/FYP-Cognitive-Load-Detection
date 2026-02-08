@@ -49,17 +49,14 @@ def test_feature_names_consistency():
     config = Config(config_dict)
     feature_names = get_feature_names(config.to_dict())
 
-    # Check expected features are present (no TEPR features)
+    # Check expected features are present
+    # NOTE: brightness and quality metrics are excluded from model features
     expected_features = [
         "blink_rate",
         "blink_count",
         "mean_blink_duration",
         "ear_std",
-        "mean_brightness",
-        "std_brightness",
         "perclos",
-        "mean_quality",
-        "valid_frame_ratio",
     ]
 
     assert len(feature_names) == len(expected_features)
@@ -94,14 +91,12 @@ def test_feature_names_with_geometry_enabled():
         "blink_count",
         "mean_blink_duration",
         "ear_std",
-        "mean_brightness",
-        "std_brightness",
         "perclos",
-        "mean_quality",
-        "valid_frame_ratio",
         "mouth_open_mean",
         "mouth_open_std",
         "roll_std",
+        "pitch_std",
+        "yaw_std",
         "motion_mean",
         "motion_std",
     ]
@@ -198,24 +193,6 @@ def test_json_save_load():
         # Load
         loaded_data = load_json(json_path)
         assert loaded_data == data
-
-
-@pytest.mark.skipif(
-    True,  # Skip by default (requires dependencies)
-    reason="Requires full dependencies and sample data"
-)
-def test_end_to_end_pipeline():
-    """
-    End-to-end integration test (requires sample data).
-
-    This test is skipped by default and should be run manually
-    after generating sample data and installing dependencies.
-    """
-    from src.cle.extract.pipeline_offline import main as extract_main
-    from src.cle.train.train import main as train_main
-
-    # This would test the full pipeline with real data
-    pass
 
 
 if __name__ == "__main__":

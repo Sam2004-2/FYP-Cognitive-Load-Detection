@@ -287,16 +287,22 @@ def main():
 
     df = pd.DataFrame(all_window_features)
 
-    # Reorder columns: metadata first, then features
+    # Reorder columns: metadata first, then model features, then monitoring features
     feature_names = get_feature_names(config.to_dict())
     metadata_cols = ["user_id", "task", "video", "label", "role", "t_start_s", "t_end_s"]
     ordered_cols = metadata_cols + feature_names
 
-    # Ensure all columns exist
+    # Ensure all model columns exist
     for col in ordered_cols:
         if col not in df.columns:
             logger.warning(f"Missing column {col}, adding with zeros")
             df[col] = "" if col in metadata_cols else 0.0
+
+    # Also keep monitoring/quality columns that are computed but not model inputs
+    monitoring_cols = ["mean_brightness", "std_brightness", "mean_quality", "valid_frame_ratio"]
+    for col in monitoring_cols:
+        if col in df.columns and col not in ordered_cols:
+            ordered_cols.append(col)
 
     df = df[ordered_cols]
 

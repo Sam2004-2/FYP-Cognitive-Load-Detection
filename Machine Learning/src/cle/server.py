@@ -124,7 +124,7 @@ async def startup_event():
         sys.exit(1)
 
     # Load model artifacts from models directory (env override supported)
-    models_dir_str = os.environ.get("CLE_MODELS_DIR", "models/video_physio_regression_z01_geom")
+    models_dir_str = os.environ.get("CLE_MODELS_DIR", "models/video_physio_z01_v2")
     models_dir = Path(models_dir_str)
     if not models_dir.exists():
         legacy_dir = Path("models/stress_classifier_rf")
@@ -258,9 +258,10 @@ async def save_training_data(request: TrainingDataRequest):
         # Define feature columns (must match model training order)
         feature_columns = [
             "blink_rate", "blink_count", "mean_blink_duration", "ear_std",
-            "mean_brightness", "std_brightness", "perclos", "mean_quality",
-            "valid_frame_ratio",
-            "mouth_open_mean", "mouth_open_std", "roll_std", "motion_mean", "motion_std",
+            "perclos",
+            "mouth_open_mean", "mouth_open_std", "roll_std",
+            "pitch_std", "yaw_std",
+            "motion_mean", "motion_std",
         ]
 
         # Write CSV

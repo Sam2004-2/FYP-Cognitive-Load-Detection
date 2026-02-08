@@ -289,6 +289,14 @@ def compute_window_features(window_data: List[Dict], config: Dict, fps: float) -
         roll_vals = roll_vals[np.isfinite(roll_vals)]
         features["roll_std"] = float(np.std(roll_vals)) if len(roll_vals) > 0 else 0.0
 
+        pitch_vals = np.array([f.get("pitch", np.nan) for f in valid_frames], dtype=float)
+        pitch_vals = pitch_vals[np.isfinite(pitch_vals)]
+        features["pitch_std"] = float(np.std(pitch_vals)) if len(pitch_vals) > 0 else 0.0
+
+        yaw_vals = np.array([f.get("yaw", np.nan) for f in valid_frames], dtype=float)
+        yaw_vals = yaw_vals[np.isfinite(yaw_vals)]
+        features["yaw_std"] = float(np.std(yaw_vals)) if len(yaw_vals) > 0 else 0.0
+
         # Motion: speed of eye-center movement for valid consecutive frames
         speeds: List[float] = []
         for prev, curr in zip(valid_frames, valid_frames[1:]):
@@ -359,6 +367,8 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
             "mouth_open_mean": np.nan,
             "mouth_open_std": np.nan,
             "roll_std": np.nan,
+            "pitch_std": np.nan,
+            "yaw_std": np.nan,
             "motion_mean": np.nan,
             "motion_std": np.nan,
         })
@@ -368,7 +378,13 @@ def get_zero_features(config: Union[Dict, Any]) -> Dict[str, float]:
 
 def get_feature_names(config: Union[Dict, Any]) -> List[str]:
     """
-    Get ordered list of feature names based on configuration.
+    Get ordered list of **model** feature names based on configuration.
+
+    This returns only the features used as model inputs.  Environmental
+    confounds (brightness) and quality-control metrics (mean_quality,
+    valid_frame_ratio) are excluded here -- they are still *computed* by
+    ``compute_window_features`` for monitoring and filtering but are not
+    used as predictive features.
 
     Args:
         config: Configuration dictionary or Config object
@@ -376,7 +392,7 @@ def get_feature_names(config: Union[Dict, Any]) -> List[str]:
     Returns:
         Ordered list of feature names
     """
-    feature_names = []
+    feature_names: List[str] = []
 
     # TEPR features removed - no longer part of feature set
 
@@ -388,25 +404,25 @@ def get_feature_names(config: Union[Dict, Any]) -> List[str]:
             "ear_std",
         ])
 
-    if _get_config_value(config, "features_enabled.brightness", True):
-        feature_names.extend([
-            "mean_brightness",
-            "std_brightness",
-        ])
+    # NOTE: brightness features (mean_brightness, std_brightness) are
+    # intentionally excluded from the model feature set.  They capture
+    # ambient lighting conditions, not cognitive load, and act as a
+    # confound.  They are still computed for quality monitoring.
 
     if _get_config_value(config, "features_enabled.perclos", True):
         feature_names.append("perclos")
 
-    feature_names.extend([
-        "mean_quality",
-        "valid_frame_ratio",
-    ])
+    # NOTE: mean_quality and valid_frame_ratio are quality-control
+    # metrics, not cognitive load indicators.  Removed from model
+    # features to avoid confounding.
 
     if _get_config_value(config, "features_enabled.geometry", False):
         feature_names.extend([
             "mouth_open_mean",
             "mouth_open_std",
             "roll_std",
+            "pitch_std",
+            "yaw_std",
             "motion_mean",
             "motion_std",
         ])
