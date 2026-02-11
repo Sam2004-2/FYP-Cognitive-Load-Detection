@@ -3,9 +3,15 @@ import { NASATLXScores } from '../types';
 
 interface NasaTLXFormProps {
   onSubmit: (scores: NASATLXScores) => void;
+  title?: string;
+  submitLabel?: string;
 }
 
-const NasaTLXForm: React.FC<NasaTLXFormProps> = ({ onSubmit }) => {
+const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
+  onSubmit,
+  title = 'NASA Task Load Index (TLX)',
+  submitLabel = 'Submit Assessment',
+}) => {
   const [scores, setScores] = useState<NASATLXScores>({
     mentalDemand: 50,
     physicalDemand: 50,
@@ -35,7 +41,7 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({ onSubmit }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">NASA Task Load Index (TLX)</h3>
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>
       
       {dimensions.map(({ key, label, description }) => (
         <div key={key} className="space-y-2">
@@ -63,11 +69,10 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({ onSubmit }) => {
         type="submit"
         className="w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
       >
-        Submit Assessment
+        {submitLabel}
       </button>
     </form>
   );
 };
 
 export default NasaTLXForm;
-
