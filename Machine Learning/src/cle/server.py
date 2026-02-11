@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -38,7 +37,6 @@ class PredictionResponse(BaseModel):
     """Response with cognitive load prediction."""
 
     cli: float = Field(..., description="Cognitive Load Index (0-1)")
-    confidence: float = Field(..., description="Prediction confidence (0-1)")
     success: bool = Field(..., description="Whether prediction succeeded")
     message: Optional[str] = Field(None, description="Optional message")
 
@@ -192,7 +190,7 @@ async def predict_cognitive_load(request: PredictionRequest):
         request: Window features
 
     Returns:
-        Cognitive Load Index and confidence
+        Cognitive Load Index
     """
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
@@ -205,13 +203,12 @@ async def predict_cognitive_load(request: PredictionRequest):
         logger.debug(f"Received features: {features_dict}")
 
         # Make prediction
-        cli, confidence = predict_window(features_dict, artifacts)
+        cli = predict_window(features_dict, artifacts)
 
-        logger.info(f"Prediction: CLI={cli:.3f}, confidence={confidence:.3f}")
+        logger.info(f"Prediction: CLI={cli:.3f}")
 
         return PredictionResponse(
             cli=cli,
-            confidence=confidence,
             success=True,
             message=None,
         )

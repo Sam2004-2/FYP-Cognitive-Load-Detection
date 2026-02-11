@@ -5,7 +5,7 @@ High-level functions for loading models and making predictions.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 
@@ -87,7 +87,7 @@ def load_model(models_dir: str) -> Dict:
 def predict_window(
     features: Union[Dict, np.ndarray, List],
     artifacts: Dict,
-) -> Tuple[float, float]:
+) -> float:
     """
     Predict Cognitive Load Index (CLI) for a window of features.
 
@@ -99,9 +99,7 @@ def predict_window(
         artifacts: Model artifacts from load_model()
 
     Returns:
-        Tuple of (cli, confidence):
-            - cli: Cognitive Load Index in [0, 1]
-            - confidence: Prediction confidence in [0, 1]
+        cli: Cognitive Load Index in [0, 1]
 
     Raises:
         ValueError: If features don't match expected format
@@ -111,14 +109,9 @@ def predict_window(
     feature_names = artifacts["feature_spec"]["features"]
 
     # Convert features to array
-    valid_frame_ratio = 1.0
     if isinstance(features, dict):
         # Extract features in correct order
         feature_array = np.array([features.get(name, 0.0) for name in feature_names])
-        try:
-            valid_frame_ratio = float(features.get("valid_frame_ratio", 1.0))
-        except (TypeError, ValueError):
-            valid_frame_ratio = 1.0
     elif isinstance(features, (list, tuple)):
         feature_array = np.array(features)
     elif isinstance(features, np.ndarray):
@@ -157,13 +150,8 @@ def predict_window(
         cli_raw = float(model.predict(features_scaled)[0])
         cli_raw = float(np.clip(cli_raw, 0.0, 1.0))
 
-    confidence = abs(cli_raw - 0.5) * 2.0
-    confidence = float(np.clip(confidence, 0.0, 1.0))
-    confidence = float(np.clip(confidence * np.clip(valid_frame_ratio, 0.0, 1.0), 0.0, 1.0))
-
     cli = float(cli_raw)
-
-    return cli, confidence
+    return cli
 
 
 def extract_features_from_window(
@@ -191,7 +179,7 @@ def extract_features_from_window(
         ...     # ... more frames
         ... ]
         >>> features = extract_features_from_window(frame_data, config, fps=30.0)
-        >>> cli, conf = predict_window(features, artifacts)
+        >>> cli = predict_window(features, artifacts)
     """
     features = compute_window_features(frame_data, config, fps)
     return features
@@ -202,7 +190,7 @@ def predict_from_frame_data(
     artifacts: Dict,
     config: Dict,
     fps: float = 30.0,
-) -> Tuple[float, float]:
+) -> float:
     """
     End-to-end prediction from per-frame features.
 
@@ -215,12 +203,11 @@ def predict_from_frame_data(
         fps: Frames per second
 
     Returns:
-        Tuple of (cli, confidence)
+        cli: Cognitive Load Index in [0, 1]
     """
     # Extract window features
     window_features = extract_features_from_window(frame_data, config, fps)
 
     # Predict
-    cli, confidence = predict_window(window_features, artifacts)
-
-    return cli, confidence
+    cli = predict_window(window_features, artifacts)
+    return cli

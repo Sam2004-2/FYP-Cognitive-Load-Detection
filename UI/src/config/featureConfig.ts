@@ -48,8 +48,6 @@ export const FEATURE_CONFIG = {
   realtime: {
     /** EWMA smoothing parameter (0=no smoothing, 1=no memory) */
     smoothing_alpha: 0.4,
-    /** Minimum confidence to display result */
-    conf_threshold: 0.6,
   },
 
   /** Backend API configuration */

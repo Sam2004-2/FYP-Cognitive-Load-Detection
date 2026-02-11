@@ -22,7 +22,7 @@ const bodyMap: Record<StudyInterventionType, string> = {
   pacing_change: 'Exposure time has been increased for upcoming items to reduce overload.',
   difficulty_step_down: 'Interference intensity has been reduced for the remaining hard-block items.',
   suppressed_trigger: 'A high-load trigger was detected and logged, but no adaptation is applied in baseline condition.',
-  low_confidence_pause: 'Signal quality is low. Adaptive actions are temporarily paused until confidence recovers.',
+  low_confidence_pause: 'Signal quality is low. Adaptive actions are temporarily paused until quality recovers.',
 };
 
 const StudyInterventionModal: React.FC<StudyInterventionModalProps> = ({

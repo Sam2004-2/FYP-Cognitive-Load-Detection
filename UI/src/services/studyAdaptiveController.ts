@@ -4,7 +4,6 @@ import { StudyCondition, StudyInterventionEvent, StudyInterventionType, StudyPha
 interface CliInputSample {
   timestampMs: number;
   cli: number;
-  confidence: number;
   validFrameRatio: number;
   illuminationStd: number;
   sessionTimeS: number;
@@ -26,7 +25,6 @@ export interface AdaptiveDecision {
 
 interface DecisionWindowAggregate {
   cli: number[];
-  confidence: number[];
   validFrameRatio: number[];
   illuminationStd: number[];
   timestampMs: number;
@@ -99,7 +97,6 @@ export class StudyAdaptiveController {
     const smoothedCli = mean(this.rollingDecisionMeans);
 
     const isLowQuality =
-      finalized.confidence < STUDY_QUALITY_CONFIG.confidenceMin ||
       finalized.validFrameRatio < STUDY_QUALITY_CONFIG.validFrameRatioMin ||
       finalized.illuminationStd > STUDY_QUALITY_CONFIG.illuminationStdMax;
 
@@ -114,7 +111,7 @@ export class StudyAdaptiveController {
 
     if (enteringLowConfidence) {
       return {
-        event: this.makeEvent('low_confidence_pause', 'paused', finalized, smoothedCli, 'Adaptation paused due to low signal confidence.'),
+        event: this.makeEvent('low_confidence_pause', 'paused', finalized, smoothedCli, 'Adaptation paused due to low signal quality.'),
         actionType: 'low_confidence_pause',
         state: this.getState(),
       };
@@ -189,7 +186,6 @@ export class StudyAdaptiveController {
       this.decisionBucketStartMs = sample.timestampMs;
       this.bucket = {
         cli: [],
-        confidence: [],
         validFrameRatio: [],
         illuminationStd: [],
         timestampMs: sample.timestampMs,
@@ -199,7 +195,6 @@ export class StudyAdaptiveController {
     }
 
     this.bucket.cli.push(sample.cli);
-    this.bucket.confidence.push(sample.confidence);
     this.bucket.validFrameRatio.push(sample.validFrameRatio);
     this.bucket.illuminationStd.push(sample.illuminationStd);
     this.bucket.timestampMs = sample.timestampMs;
@@ -210,7 +205,6 @@ export class StudyAdaptiveController {
   private finalizeBucket():
     | {
         cli: number;
-        confidence: number;
         validFrameRatio: number;
         illuminationStd: number;
         timestampMs: number;
@@ -222,7 +216,6 @@ export class StudyAdaptiveController {
 
     const out = {
       cli: mean(this.bucket.cli),
-      confidence: mean(this.bucket.confidence),
       validFrameRatio: mean(this.bucket.validFrameRatio),
       illuminationStd: mean(this.bucket.illuminationStd),
       timestampMs: this.bucket.timestampMs,
@@ -241,7 +234,6 @@ export class StudyAdaptiveController {
     outcome: 'applied' | 'suppressed' | 'paused',
     finalized: {
       cli: number;
-      confidence: number;
       validFrameRatio: number;
       illuminationStd: number;
       timestampMs: number;
@@ -259,7 +251,6 @@ export class StudyAdaptiveController {
       outcome,
       cli: finalized.cli,
       smoothedCli,
-      confidence: finalized.confidence,
       validFrameRatio: finalized.validFrameRatio,
       details,
     };

@@ -63,7 +63,6 @@ export interface StudySessionPlan {
 }
 
 export interface StudyCliQualityFlags {
-  lowConfidence: boolean;
   lowValidFrameRatio: boolean;
   unstableIllumination: boolean;
 }
@@ -74,7 +73,6 @@ export interface StudyCliSample {
   phase: StudyPhaseTag;
   rawCli: number;
   smoothedCli: number;
-  confidence: number;
   validFrameRatio: number;
   illuminationStd: number;
   qualityFlags: StudyCliQualityFlags;
@@ -88,7 +86,6 @@ export interface StudyInterventionEvent {
   outcome: StudyInterventionOutcome;
   cli: number;
   smoothedCli: number;
-  confidence: number;
   validFrameRatio: number;
   details?: string;
 }

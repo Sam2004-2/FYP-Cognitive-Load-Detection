@@ -417,7 +417,6 @@ const StudySession: React.FC = () => {
 
         const phaseTag = phaseToTag(phase);
         const qualityFlags = {
-          lowConfidence: result.confidence < STUDY_QUALITY_CONFIG.confidenceMin,
           lowValidFrameRatio: windowFeatures.valid_frame_ratio < STUDY_QUALITY_CONFIG.validFrameRatioMin,
           unstableIllumination: windowFeatures.std_brightness > STUDY_QUALITY_CONFIG.illuminationStdMax,
         };
@@ -428,7 +427,6 @@ const StudySession: React.FC = () => {
           phase: phaseTag,
           rawCli: result.cli,
           smoothedCli: smoothed,
-          confidence: result.confidence,
           validFrameRatio: windowFeatures.valid_frame_ratio,
           illuminationStd: windowFeatures.std_brightness,
           qualityFlags,
@@ -442,7 +440,6 @@ const StudySession: React.FC = () => {
           {
             timestampMs: cliSample.timestampMs,
             cli: result.cli,
-            confidence: result.confidence,
             validFrameRatio: windowFeatures.valid_frame_ratio,
             illuminationStd: windowFeatures.std_brightness,
             sessionTimeS: totalSessionSeconds,
@@ -770,7 +767,7 @@ const StudySession: React.FC = () => {
               <span>{isCalibrated ? 'yes' : 'no'}</span>
             </div>
             <div className="flex justify-between">
-              <span>Low confidence mode</span>
+              <span>Low quality mode</span>
               <span>{lowConfidenceMode ? 'on' : 'off'}</span>
             </div>
             <div className="flex justify-between">

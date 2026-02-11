@@ -83,10 +83,8 @@ export function buildStudyExportTables(
       phase: sample.phase,
       raw_cli: sample.rawCli,
       smoothed_cli: sample.smoothedCli,
-      confidence: sample.confidence,
       valid_frame_ratio: sample.validFrameRatio,
       illumination_std: sample.illuminationStd,
-      low_confidence_flag: sample.qualityFlags.lowConfidence,
       low_vfr_flag: sample.qualityFlags.lowValidFrameRatio,
       unstable_illumination_flag: sample.qualityFlags.unstableIllumination,
     }))
@@ -131,7 +129,6 @@ export function buildStudyExportTables(
       outcome: event.outcome,
       cli: event.cli,
       smoothed_cli: event.smoothedCli,
-      confidence: event.confidence,
       valid_frame_ratio: event.validFrameRatio,
       details: event.details ?? '',
     }))

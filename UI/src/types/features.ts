@@ -102,8 +102,6 @@ export interface Blink {
 export interface PredictionResult {
   /** Cognitive Load Index (0-1) */
   cli: number;
-  /** Prediction confidence (0-1) */
-  confidence: number;
   /** Whether prediction succeeded */
   success: boolean;
   /** Optional message */

@@ -17,7 +17,6 @@ export const STUDY_CONFIG: StudySessionPlan = {
 };
 
 export const STUDY_QUALITY_CONFIG = {
-  confidenceMin: 0.6,
   validFrameRatioMin: 0.95,
   illuminationStdMax: 28,
 };

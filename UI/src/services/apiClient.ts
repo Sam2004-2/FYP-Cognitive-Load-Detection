@@ -95,7 +95,7 @@ export async function getModelInfo(): Promise<ModelInfo> {
  * 
  * @param features - Window-level features
  * @param retries - Number of retries on failure (default: 2)
- * @returns Prediction result with CLI and confidence
+ * @returns Prediction result with CLI
  */
 // Main prediction API call with retry logic and NaN sanitisation ***
 export async function predictCognitiveLoad(

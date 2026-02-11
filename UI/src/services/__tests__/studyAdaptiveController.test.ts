@@ -1,10 +1,9 @@
 import { StudyAdaptiveController } from '../studyAdaptiveController';
 
-function sample(timestampMs: number, cli = 0.85, confidence = 0.9, vfr = 0.99, illum = 10) {
+function sample(timestampMs: number, cli = 0.85, vfr = 0.99, illum = 10) {
   return {
     timestampMs,
     cli,
-    confidence,
     validFrameRatio: vfr,
     illuminationStd: illum,
     sessionTimeS: timestampMs / 1000,
@@ -47,7 +46,7 @@ describe('StudyAdaptiveController', () => {
     let pauseSeen = false;
 
     for (let i = 0; i < 6; i += 1) {
-      const decision = controller.ingest(sample(i * 5000, 0.7, 0.3, 0.5, 50), 'adaptive');
+      const decision = controller.ingest(sample(i * 5000, 0.7, 0.5, 50), 'adaptive');
       if (decision.actionType === 'low_confidence_pause') {
         pauseSeen = true;
       }
