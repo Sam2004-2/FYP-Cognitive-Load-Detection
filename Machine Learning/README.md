@@ -22,11 +22,18 @@ cd "Machine Learning" && python3 -m src.cle.extract.pipeline_offline \
   --config configs/default.yaml
 ```
 
-## Train the physio-aligned student (recommended)
+## Canonical physio-aligned training chain (recommended)
 
-This trains a regression model to predict a **per-user normalized** physiological target (`z01`) and saves artifacts for real-time inference.
+This workflow is the supported thesis training path:
+1) extract physiological features, 2) generate physio stress labels, 3) train the video student.
 
 ```bash
+cd "Machine Learning" && python3 scripts/extract_all_physio_features.py \
+  --physio-dir ../Physiological \
+  --output data/processed/physio_features.csv
+
+cd "Machine Learning" && python3 scripts/generate_physio_labels.py
+
 cd "Machine Learning" && python3 scripts/train_video_physio_regression.py \
   --video-features data/processed/stress_features_10s_geom.csv \
   --physio-labels data/processed/physio_stress_labels.csv \
