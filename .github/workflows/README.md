@@ -22,13 +22,7 @@ The CI pipeline runs automatically on:
   - Model training and evaluation tests
   - Integration tests
 
-**2. lint-ml-pipeline**
-- Checks code quality using flake8
-- Verifies code formatting with black
-- Runs on Python codebase only
-- Configured to not fail the build (continue-on-error)
-
-**3. test-ui**
+**2. test-ui**
 - Builds the React TypeScript UI
 - Runs frontend tests
 - Verifies that the UI compiles successfully
@@ -51,7 +45,7 @@ python -m pytest tests/ -v --cov=src --cov-report=term
 
 ### UI Build
 ```bash
-cd ui
+cd UI
 npm run build
 ```
 
@@ -74,17 +68,6 @@ npm run build
 - Verify all npm dependencies are in `package.json`
 - Test locally with `npm run build`
 
-### Linting Failures
-- Run `black src/ tests/ --line-length=100` to auto-format
-- Run `flake8 src/ tests/` to check for issues
-
-## Coverage Reports
-
-Code coverage reports are uploaded to Codecov automatically. You can view detailed coverage metrics by:
-1. Setting up Codecov integration (add repository to Codecov.io)
-2. Adding the Codecov badge to your README
-3. Viewing coverage trends in the Codecov dashboard
-
 ## Status Badge
 
 Add this to your main README.md to show CI status:
@@ -94,4 +77,3 @@ Add this to your main README.md to show CI status:
 ```
 
 Replace `YOUR_USERNAME` with your GitHub username.
-
