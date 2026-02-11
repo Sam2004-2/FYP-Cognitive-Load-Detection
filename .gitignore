@@ -65,11 +65,8 @@ models/*.pkl
 
 # Machine Learning models: ignore by default (allowlist tracked demo models)
 Machine Learning/models/*
-!Machine Learning/models/stress_classifier_rf/
-!Machine Learning/models/stress_classifier_rf/**
 !Machine Learning/models/video_physio_regression_z01_geom/
 !Machine Learning/models/video_physio_regression_z01_geom/**
-!Machine Learning/models/physio_teacher_eval.json
 
 # Archived models (not pushed to repo)
 Machine Learning/models/archive/
