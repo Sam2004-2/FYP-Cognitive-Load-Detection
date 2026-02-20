@@ -8,7 +8,7 @@ This guide covers the only supported thesis workflow:
 ## 1) Start Backend
 
 ```bash
-cd "Machine Learning"
+cd machine_learning
 python3 -m pip install -e ".[dev]"
 python3 -m src.cle.server --host 0.0.0.0 --port 8000 \
   --models-dir models/video_physio_regression_z01_geom
@@ -37,11 +37,11 @@ Then run:
 ## 3) Canonical Training Pipeline
 
 ```bash
-cd "Machine Learning"
+cd machine_learning
 
 # A. Extract physiological features
 python3 scripts/extract_all_physio_features.py \
-  --physio-dir ../Physiological \
+  --physio-dir ../data/raw/Physiological \
   --output data/processed/physio_features.csv
 
 # B. Generate physiological stress labels
@@ -60,7 +60,7 @@ python3 scripts/train_video_physio_regression.py \
 ## 4) Validation Commands
 
 ```bash
-cd "Machine Learning" && python3 -m pytest tests -q
+cd machine_learning && python3 -m pytest tests -q
 cd UI && npm test -- --watchAll=false --passWithNoTests
 cd UI && npm run build
 ```

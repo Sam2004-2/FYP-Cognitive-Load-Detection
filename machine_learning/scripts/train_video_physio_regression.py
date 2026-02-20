@@ -169,7 +169,7 @@ def main() -> int:
     parser.add_argument(
         "--binary-labels",
         type=str,
-        default="../labels.csv",
+        default="../../data/raw/labels.csv",
         help="labels.csv path for secondary binary-stress AUC.",
     )
     parser.add_argument(
