@@ -13,7 +13,6 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.cle.config import load_config
-from src.cle.data.load_data import extract_task_from_video_path
 from src.cle.extract.features import compute_window_features, get_feature_names
 from src.cle.extract.landmarks import FaceMeshExtractor
 from src.cle.extract.per_frame import extract_frame_features
@@ -247,7 +246,7 @@ def main():
                 "task": (
                     row["task"]
                     if "task" in manifest.columns and pd.notna(row.get("task"))
-                    else extract_task_from_video_path(video_file)
+                    else Path(video_file).stem.split("_", 1)[-1] if "_" in Path(video_file).stem else "unknown"
                 ),
             }
 

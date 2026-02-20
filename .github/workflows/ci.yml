@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, deploy ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, deploy ]
 
 jobs:
   test-ml-pipeline:
