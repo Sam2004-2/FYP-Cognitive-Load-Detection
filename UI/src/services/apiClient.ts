@@ -95,11 +95,11 @@ export async function getModelInfo(): Promise<ModelInfo> {
  * 
  * @param features - Window-level features
  * @param retries - Number of retries on failure (default: 2)
- * @returns Prediction result with CLI and confidence
+ * @returns Prediction result with CLI
  */
 // Main prediction API call with retry logic and NaN sanitisation ***
 export async function predictCognitiveLoad(
-  features: WindowFeatures,
+  features: Record<string, number>,
   retries: number = 2  // Default 2 retries = 3 total attempts ***
 ): Promise<PredictionResult> {
   let lastError: Error | null = null;
@@ -113,7 +113,7 @@ export async function predictCognitiveLoad(
           key,
           isNaN(value) || !isFinite(value) ? 0 : value,
         ])
-      ) as WindowFeatures;  // Type assertion tells TS the result is WindowFeatures ***
+      ) as Record<string, number>;
 
       const response = await fetch(`${API_BASE_URL}/predict`, {
         method: 'POST',
@@ -285,4 +285,3 @@ export async function saveTrainingData(
     );
   }
 }
-

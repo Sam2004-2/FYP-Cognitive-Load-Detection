@@ -22,7 +22,7 @@ const SessionSetup: React.FC = () => {
   };
 
   const startSession = () => {
-    navigate('/session');
+    navigate('/study/setup');
   };
 
   return (
@@ -31,7 +31,7 @@ const SessionSetup: React.FC = () => {
         <div className="bg-white rounded-lg shadow-xl p-8">
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-gray-800 mb-2">Cognitive Load Monitor</h1>
-            <p className="text-gray-600">Real-time learning assistance through mental effort tracking</p>
+            <p className="text-gray-600">Study protocol workflow for your pilot crossover sessions</p>
           </div>
 
           <div className="space-y-6">
@@ -71,31 +71,9 @@ const SessionSetup: React.FC = () => {
                 onClick={startSession}
                 className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-200 shadow-lg"
               >
-                Start Learning Session
+                Start Study Setup
               </button>
             )}
-          </div>
-
-          <div className="mt-6 flex justify-center gap-6">
-            <button
-              onClick={() => navigate('/settings')}
-              className="text-gray-600 hover:text-gray-800 text-sm flex items-center"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Settings
-            </button>
-            <button
-              onClick={() => navigate('/collect')}
-              className="text-orange-600 hover:text-orange-800 text-sm flex items-center"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-              </svg>
-              Data Collection
-            </button>
           </div>
         </div>
       </div>

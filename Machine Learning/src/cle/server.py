@@ -6,12 +6,12 @@ Provides REST API endpoints for real-time cognitive load estimation.
 
 import argparse
 import csv
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -27,31 +27,16 @@ artifacts: Optional[Dict] = None
 config: Optional[Dict] = None
 
 
-class WindowFeatures(BaseModel):
-    """Window-level features for prediction."""
-
-    blink_rate: float = Field(..., description="Blinks per minute")
-    blink_count: float = Field(..., description="Total blinks in window")
-    mean_blink_duration: float = Field(..., description="Mean blink duration (ms)")
-    ear_std: float = Field(..., description="EAR standard deviation")
-    mean_brightness: float = Field(..., description="Mean face brightness")
-    std_brightness: float = Field(..., description="Brightness standard deviation")
-    perclos: float = Field(..., description="Percentage of eye closure")
-    mean_quality: float = Field(..., description="Mean detection quality")
-    valid_frame_ratio: float = Field(..., description="Ratio of valid frames")
-
-
 class PredictionRequest(BaseModel):
     """Request for cognitive load prediction."""
 
-    features: WindowFeatures
+    features: Dict[str, float] = Field(..., description="Feature map (name -> float)")
 
 
 class PredictionResponse(BaseModel):
     """Response with cognitive load prediction."""
 
     cli: float = Field(..., description="Cognitive Load Index (0-1)")
-    confidence: float = Field(..., description="Prediction confidence (0-1)")
     success: bool = Field(..., description="Whether prediction succeeded")
     message: Optional[str] = Field(None, description="Optional message")
 
@@ -69,7 +54,8 @@ class ModelInfoResponse(BaseModel):
 
     features: List[str]
     n_features: int
-    calibration: Dict
+    task_mode: str
+    metadata: Dict[str, Any]
 
 
 class TrainingSample(BaseModel):
@@ -80,7 +66,7 @@ class TrainingSample(BaseModel):
     label: str = Field(..., description="Cognitive load label (low/high)")
     difficulty: str = Field(..., description="Task difficulty")
     task_type: str = Field(..., description="Type of task")
-    features: WindowFeatures
+    features: Dict[str, float]
     valid_frame_ratio: float = Field(..., description="Ratio of valid frames")
 
 
@@ -135,8 +121,9 @@ async def startup_event():
         logger.error(f"Failed to load configuration: {e}")
         sys.exit(1)
 
-    # Load model artifacts from default models directory
-    models_dir = Path("models/stress_classifier_rf")
+    # Load model artifacts from models directory (env override supported)
+    models_dir_str = os.environ.get("CLE_MODELS_DIR", "models/video_physio_regression_z01_geom")
+    models_dir = Path(models_dir_str)
     if not models_dir.exists():
         logger.error(f"Models directory not found: {models_dir}")
         sys.exit(1)
@@ -189,7 +176,8 @@ async def get_model_info():
     return ModelInfoResponse(
         features=artifacts["feature_spec"]["features"],
         n_features=artifacts["feature_spec"]["n_features"],
-        calibration=artifacts["calibration"],
+        task_mode=artifacts.get("task_mode", "classification"),
+        metadata=artifacts.get("calibration") or {},
     )
 
 
@@ -202,26 +190,25 @@ async def predict_cognitive_load(request: PredictionRequest):
         request: Window features
 
     Returns:
-        Cognitive Load Index and confidence
+        Cognitive Load Index
     """
     if artifacts is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
         # Convert features to dict
-        features_dict = request.features.model_dump()
+        features_dict = request.features
 
         # Log received features
         logger.debug(f"Received features: {features_dict}")
 
         # Make prediction
-        cli, confidence = predict_window(features_dict, artifacts)
+        cli = predict_window(features_dict, artifacts)
 
-        logger.info(f"Prediction: CLI={cli:.3f}, confidence={confidence:.3f}")
+        logger.info(f"Prediction: CLI={cli:.3f}")
 
         return PredictionResponse(
             cli=cli,
-            confidence=confidence,
             success=True,
             message=None,
         )
@@ -261,8 +248,10 @@ async def save_training_data(request: TrainingDataRequest):
         # Define feature columns (must match model training order)
         feature_columns = [
             "blink_rate", "blink_count", "mean_blink_duration", "ear_std",
-            "mean_brightness", "std_brightness", "perclos", "mean_quality",
-            "valid_frame_ratio"
+            "perclos",
+            "mouth_open_mean", "mouth_open_std", "roll_std",
+            "pitch_std", "yaw_std",
+            "motion_mean", "motion_std",
         ]
 
         # Write CSV
@@ -278,7 +267,7 @@ async def save_training_data(request: TrainingDataRequest):
 
             # Data rows
             for sample in request.samples:
-                features_dict = sample.features.model_dump()
+                features_dict = sample.features
                 row = [
                     request.participant_id,
                     sample.timestamp,
@@ -358,8 +347,16 @@ def main():
         action="store_true",
         help="Enable auto-reload for development",
     )
+    parser.add_argument(
+        "--models-dir",
+        type=str,
+        default=None,
+        help="Path to model artifacts directory (overrides CLE_MODELS_DIR).",
+    )
 
     args = parser.parse_args()
+    if args.models_dir:
+        os.environ["CLE_MODELS_DIR"] = args.models_dir
 
     # Setup logging
     setup_logging(level=args.log_level, log_dir="logs", log_file="server.log")
@@ -376,4 +373,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

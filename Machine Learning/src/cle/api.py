@@ -5,7 +5,7 @@ High-level functions for loading models and making predictions.
 """
 
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 
@@ -27,8 +27,10 @@ def load_model(models_dir: str) -> Dict:
         Dictionary with:
             - model: Trained (calibrated) model
             - scaler: Fitted scaler
+            - imputer: Optional fitted imputer (regression only)
             - feature_spec: Feature specification
-            - calibration: Calibration metadata
+            - calibration: Calibration metadata (classification) or model_meta (regression)
+            - task_mode: "classification" or "regression"
 
     Raises:
         FileNotFoundError: If required artifacts are missing
@@ -38,20 +40,40 @@ def load_model(models_dir: str) -> Dict:
     if not models_dir.exists():
         raise FileNotFoundError(f"Models directory not found: {models_dir}")
 
-    # Load artifacts
+    # Load artifacts (classification or regression)
     try:
-        model = load_model_artifact(models_dir / "model.bin")
+        model_path = models_dir / "model.bin"
+        regression_model_path = models_dir / "model_regression.bin"
+
+        task_mode = "classification"
+        if regression_model_path.exists() and not model_path.exists():
+            task_mode = "regression"
+
+        if task_mode == "classification":
+            model = load_model_artifact(model_path)
+        else:
+            model = load_model_artifact(regression_model_path)
+
         scaler = load_model_artifact(models_dir / "scaler.bin")
         feature_spec = load_json(models_dir / "feature_spec.json")
-        calibration = load_json(models_dir / "calibration.json")
+        if task_mode == "classification":
+            calibration: Dict[str, Any] = load_json(models_dir / "calibration.json")
+            imputer: Any | None = None
+        else:
+            meta_path = models_dir / "model_meta.json"
+            calibration = load_json(meta_path) if meta_path.exists() else {}
+            imputer_path = models_dir / "imputer.bin"
+            imputer = load_model_artifact(imputer_path) if imputer_path.exists() else None
     except FileNotFoundError as e:
         raise FileNotFoundError(f"Missing model artifact: {e}")
 
     artifacts = {
         "model": model,
         "scaler": scaler,
+        "imputer": imputer,
         "feature_spec": feature_spec,
         "calibration": calibration,
+        "task_mode": task_mode,
     }
 
     logger.info(
@@ -65,7 +87,7 @@ def load_model(models_dir: str) -> Dict:
 def predict_window(
     features: Union[Dict, np.ndarray, List],
     artifacts: Dict,
-) -> Tuple[float, float]:
+) -> float:
     """
     Predict Cognitive Load Index (CLI) for a window of features.
 
@@ -77,9 +99,7 @@ def predict_window(
         artifacts: Model artifacts from load_model()
 
     Returns:
-        Tuple of (cli, confidence):
-            - cli: Cognitive Load Index in [0, 1]
-            - confidence: Prediction confidence in [0, 1]
+        cli: Cognitive Load Index in [0, 1]
 
     Raises:
         ValueError: If features don't match expected format
@@ -115,20 +135,23 @@ def predict_window(
         logger.warning("Found NaN values in features, replacing with zeros")
         feature_array = np.nan_to_num(feature_array, nan=0.0)
 
+    # Optional imputation (used for regression artifacts)
+    imputer = artifacts.get("imputer")
+    if imputer is not None:
+        feature_array = imputer.transform(feature_array)
+
     # Scale features
     features_scaled = scaler.transform(feature_array)
 
-    # Predict
-    cli_proba = model.predict_proba(features_scaled)[0, 1]  # Probability of high load
+    task_mode = artifacts.get("task_mode", "classification")
+    if task_mode == "classification":
+        cli_raw = model.predict_proba(features_scaled)[0, 1]  # Probability of high load
+    else:
+        cli_raw = float(model.predict(features_scaled)[0])
+        cli_raw = float(np.clip(cli_raw, 0.0, 1.0))
 
-    # Confidence is based on how far the probability is from 0.5
-    # Higher distance from 0.5 means higher confidence
-    confidence = abs(cli_proba - 0.5) * 2.0  # Maps [0, 0.5] to [1, 0] and [0.5, 1] to [0, 1]
-    confidence = float(np.clip(confidence, 0.0, 1.0))
-
-    cli = float(cli_proba)
-
-    return cli, confidence
+    cli = float(cli_raw)
+    return cli
 
 
 def extract_features_from_window(
@@ -156,7 +179,7 @@ def extract_features_from_window(
         ...     # ... more frames
         ... ]
         >>> features = extract_features_from_window(frame_data, config, fps=30.0)
-        >>> cli, conf = predict_window(features, artifacts)
+        >>> cli = predict_window(features, artifacts)
     """
     features = compute_window_features(frame_data, config, fps)
     return features
@@ -167,7 +190,7 @@ def predict_from_frame_data(
     artifacts: Dict,
     config: Dict,
     fps: float = 30.0,
-) -> Tuple[float, float]:
+) -> float:
     """
     End-to-end prediction from per-frame features.
 
@@ -180,13 +203,11 @@ def predict_from_frame_data(
         fps: Frames per second
 
     Returns:
-        Tuple of (cli, confidence)
+        cli: Cognitive Load Index in [0, 1]
     """
     # Extract window features
     window_features = extract_features_from_window(frame_data, config, fps)
 
     # Predict
-    cli, confidence = predict_window(window_features, artifacts)
-
-    return cli, confidence
-
+    cli = predict_window(window_features, artifacts)
+    return cli

@@ -19,7 +19,7 @@ def test_config_loading():
     config = Config.default()
 
     assert config.get("seed") == 42
-    assert config.get("windows.length_s") == 20.0
+    assert config.get("windows.length_s") == 10.0
     assert config.get("blink.ear_thresh") == 0.21
 
     # Test validation
@@ -49,22 +49,59 @@ def test_feature_names_consistency():
     config = Config(config_dict)
     feature_names = get_feature_names(config.to_dict())
 
-    # Check expected features are present (no TEPR features)
+    # Check expected features are present
+    # NOTE: brightness and quality metrics are excluded from model features
     expected_features = [
         "blink_rate",
         "blink_count",
         "mean_blink_duration",
         "ear_std",
-        "mean_brightness",
-        "std_brightness",
         "perclos",
-        "mean_quality",
-        "valid_frame_ratio",
     ]
 
     assert len(feature_names) == len(expected_features)
     for expected in expected_features:
         assert expected in feature_names, f"Missing feature: {expected}"
+
+
+def test_feature_names_with_geometry_enabled():
+    """Test that geometry features are appended when enabled."""
+    config_dict = {
+        "seed": 42,
+        "windows": {"length_s": 20.0, "step_s": 5.0},
+        "quality": {"min_face_conf": 0.5, "max_bad_frame_ratio": 0.2},
+        "blink": {"ear_thresh": 0.21, "min_blink_ms": 120, "max_blink_ms": 400},
+        "tepr": {"baseline_s": 10.0, "min_baseline_samples": 150},
+        "features_enabled": {
+            "tepr": False,  # TEPR disabled
+            "blinks": True,
+            "perclos": True,
+            "brightness": True,
+            "geometry": True,
+            "fix_sac": False,
+            "gaze_entropy": False,
+        },
+        "model": {"type": "logreg", "calibration": "platt"},
+    }
+
+    feature_names = get_feature_names(config_dict)
+
+    expected = [
+        "blink_rate",
+        "blink_count",
+        "mean_blink_duration",
+        "ear_std",
+        "perclos",
+        "mouth_open_mean",
+        "mouth_open_std",
+        "roll_std",
+        "pitch_std",
+        "yaw_std",
+        "motion_mean",
+        "motion_std",
+    ]
+
+    assert feature_names == expected
 
 
 def test_feature_order_consistency():
@@ -158,24 +195,5 @@ def test_json_save_load():
         assert loaded_data == data
 
 
-@pytest.mark.skipif(
-    True,  # Skip by default (requires dependencies)
-    reason="Requires full dependencies and sample data"
-)
-def test_end_to_end_pipeline():
-    """
-    End-to-end integration test (requires sample data).
-
-    This test is skipped by default and should be run manually
-    after generating sample data and installing dependencies.
-    """
-    from src.cle.extract.pipeline_offline import main as extract_main
-    from src.cle.train.train import main as train_main
-
-    # This would test the full pipeline with real data
-    pass
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

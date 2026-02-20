@@ -143,6 +143,12 @@ export function extractFrameFeatures(
     ear_mean: 0.0,
     brightness: 0.0,
     quality: 0.0,
+    eye_center_x: 0.0,
+    eye_center_y: 0.0,
+    mouth_mar: 0.0,
+    roll: 0.0,
+    pitch: 0.0,
+    yaw: 0.0,
     valid: false,
   };
 
@@ -175,12 +181,55 @@ export function extractFrameFeatures(
   // Compute brightness
   const brightness = computeBrightness(imageData, roiPixels);
 
+  // Geometry features from landmarks
+  const leftEyeOuter = landmarks[LANDMARK_INDICES.LEFT_EYE_OUTER];
+  const rightEyeOuter = landmarks[LANDMARK_INDICES.RIGHT_EYE_OUTER];
+  const eyeCenterX = (leftEyeOuter.x + rightEyeOuter.x) / 2.0;
+  const eyeCenterY = (leftEyeOuter.y + rightEyeOuter.y) / 2.0;
+
+  const mouthLeft = landmarks[LANDMARK_INDICES.MOUTH_LEFT];
+  const mouthRight = landmarks[LANDMARK_INDICES.MOUTH_RIGHT];
+  const mouthUpper = landmarks[LANDMARK_INDICES.MOUTH_UPPER];
+  const mouthLower = landmarks[LANDMARK_INDICES.MOUTH_LOWER];
+
+  const mouthWidth = euclideanDistance(mouthLeft, mouthRight);
+  const mouthHeight = euclideanDistance(mouthUpper, mouthLower);
+  const mouthMar = mouthWidth > 1e-6 ? mouthHeight / mouthWidth : 0.0;
+
+  const roll = Math.atan2(
+    rightEyeOuter.y - leftEyeOuter.y,
+    rightEyeOuter.x - leftEyeOuter.x
+  );
+
+  // Head pitch: depth angle between forehead (landmark 10) and chin (landmark 152)
+  const forehead = landmarks[LANDMARK_INDICES.FOREHEAD];
+  const chin = landmarks[LANDMARK_INDICES.CHIN];
+  const pitchDy = chin.y - forehead.y; // vertical (y increases downward)
+  const pitchDz = chin.z - forehead.z; // depth
+  const pitch = Math.abs(pitchDy) > 1e-6 ? Math.atan2(pitchDz, pitchDy) : 0.0;
+
+  // Head yaw: nose offset from face center, normalised by face width
+  const noseTip = landmarks[LANDMARK_INDICES.NOSE_TIP];
+  const leftEarTragion = landmarks[LANDMARK_INDICES.LEFT_EAR_TRAGION];
+  const rightEarTragion = landmarks[LANDMARK_INDICES.RIGHT_EAR_TRAGION];
+  const faceMidX = (leftEarTragion.x + rightEarTragion.x) / 2.0;
+  const faceWidth = Math.abs(rightEarTragion.x - leftEarTragion.x);
+  const yaw = faceWidth > 1e-6
+    ? Math.atan2(noseTip.x - faceMidX, faceWidth / 2.0)
+    : 0.0;
+
   return {
     ear_left: earLeft,
     ear_right: earRight,
     ear_mean: earMean,
     brightness,
     quality: landmarkResult.quality,
+    eye_center_x: eyeCenterX,
+    eye_center_y: eyeCenterY,
+    mouth_mar: mouthMar,
+    roll,
+    pitch,
+    yaw,
     valid: true,
   };
 }
@@ -264,10 +313,10 @@ export function computeBlinkFeatures(
 } {
   if (earSeries.length === 0) {
     return {
-      blink_rate: NaN,
-      blink_count: NaN,
-      mean_blink_duration: NaN,
-      ear_std: NaN,
+      blink_rate: 0.0,
+      blink_count: 0.0,
+      mean_blink_duration: 0.0,
+      ear_std: 0.0,
     };
   }
 
@@ -327,14 +376,14 @@ export function computePERCLOS(
 }
 
 /**
- * MAIN AGGREGATION FUNCTION: Computes the 9 window features for ML model ***
+ * MAIN AGGREGATION FUNCTION: Computes the window features for ML model ***
  * 
  * Input: ~300 frames (10 seconds at 30fps) of per-frame features ***
  * Output: Single WindowFeatures object ready for API prediction ***
  * 
  * @param frameData - Array of per-frame features from WindowBuffer ***
  * @param fps - Frames per second (needed for time-based calculations) ***
- * @returns WindowFeatures with all 9 features in expected order ***
+ * @returns WindowFeatures with all base features in expected order ***
  */
 export function computeWindowFeatures(
   frameData: FrameFeatures[],
@@ -350,9 +399,16 @@ export function computeWindowFeatures(
       blink_count: NaN,
       mean_blink_duration: NaN,
       ear_std: NaN,
+      perclos: NaN,
+      mouth_open_mean: NaN,
+      mouth_open_std: NaN,
+      roll_std: NaN,
+      pitch_std: NaN,
+      yaw_std: NaN,
+      motion_mean: NaN,
+      motion_std: NaN,
       mean_brightness: NaN,
       std_brightness: NaN,
-      perclos: NaN,
       mean_quality: NaN,
       valid_frame_ratio: NaN,
     };
@@ -381,16 +437,91 @@ export function computeWindowFeatures(
   const meanQuality = qualitySeries.reduce((sum, q) => sum + q, 0) / qualitySeries.length;
   const validFrameRatio = validFrames.length / frameData.length;
 
+  // Geometry features: mouth openness + head roll variability
+  const mouthSeries = validFrames
+    .map((f) => f.mouth_mar)
+    .filter((v) => Number.isFinite(v));
+  const mouthOpenMean =
+    mouthSeries.length > 0 ? mouthSeries.reduce((sum, v) => sum + v, 0) / mouthSeries.length : 0.0;
+  const mouthVar =
+    mouthSeries.length > 0
+      ? mouthSeries.reduce((sum, v) => sum + (v - mouthOpenMean) ** 2, 0) / mouthSeries.length
+      : 0.0;
+  const mouthOpenStd = Math.sqrt(mouthVar);
+
+  const rollSeries = validFrames
+    .map((f) => f.roll)
+    .filter((v) => Number.isFinite(v));
+  const rollMean =
+    rollSeries.length > 0 ? rollSeries.reduce((sum, v) => sum + v, 0) / rollSeries.length : 0.0;
+  const rollVar =
+    rollSeries.length > 0
+      ? rollSeries.reduce((sum, v) => sum + (v - rollMean) ** 2, 0) / rollSeries.length
+      : 0.0;
+  const rollStd = Math.sqrt(rollVar);
+
+  // Pitch variability
+  const pitchSeries = validFrames
+    .map((f) => f.pitch)
+    .filter((v) => Number.isFinite(v));
+  const pitchMean =
+    pitchSeries.length > 0 ? pitchSeries.reduce((sum, v) => sum + v, 0) / pitchSeries.length : 0.0;
+  const pitchVar =
+    pitchSeries.length > 0
+      ? pitchSeries.reduce((sum, v) => sum + (v - pitchMean) ** 2, 0) / pitchSeries.length
+      : 0.0;
+  const pitchStd = Math.sqrt(pitchVar);
+
+  // Yaw variability
+  const yawSeries = validFrames
+    .map((f) => f.yaw)
+    .filter((v) => Number.isFinite(v));
+  const yawMean =
+    yawSeries.length > 0 ? yawSeries.reduce((sum, v) => sum + v, 0) / yawSeries.length : 0.0;
+  const yawVar =
+    yawSeries.length > 0
+      ? yawSeries.reduce((sum, v) => sum + (v - yawMean) ** 2, 0) / yawSeries.length
+      : 0.0;
+  const yawStd = Math.sqrt(yawVar);
+
+  // Motion features: per-frame speed of the eye center, using only valid consecutive frames
+  const speeds: number[] = [];
+  for (let i = 1; i < frameData.length; i++) {
+    const prev = frameData[i - 1];
+    const curr = frameData[i];
+    if (!prev.valid || !curr.valid) continue;
+
+    const dx = curr.eye_center_x - prev.eye_center_x;
+    const dy = curr.eye_center_y - prev.eye_center_y;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) continue;
+
+    speeds.push(Math.sqrt(dx * dx + dy * dy) * fps);
+  }
+  const motionMean = speeds.length > 0 ? speeds.reduce((sum, v) => sum + v, 0) / speeds.length : 0.0;
+  const motionVar =
+    speeds.length > 0
+      ? speeds.reduce((sum, v) => sum + (v - motionMean) ** 2, 0) / speeds.length
+      : 0.0;
+  const motionStd = Math.sqrt(motionVar);
+
   return {
+    // Model features (order matches FEATURE_NAMES)
     blink_rate: blinkFeatures.blink_rate,
     blink_count: blinkFeatures.blink_count,
     mean_blink_duration: blinkFeatures.mean_blink_duration,
     ear_std: blinkFeatures.ear_std,
+    perclos,
+    mouth_open_mean: mouthOpenMean,
+    mouth_open_std: mouthOpenStd,
+    roll_std: rollStd,
+    pitch_std: pitchStd,
+    yaw_std: yawStd,
+    motion_mean: motionMean,
+    motion_std: motionStd,
+    // Monitoring features (not model inputs, but useful for display/quality)
     mean_brightness: meanBrightness,
     std_brightness: stdBrightness,
-    perclos,
     mean_quality: meanQuality,
     valid_frame_ratio: validFrameRatio,
   };
 }
-

@@ -1,8 +1,34 @@
 # Cognitive Load Estimation - Regression Configuration
 # For training continuous load_0_1 target from StressID self-assessments
-#
-# This config extends default.yaml - only regression-specific settings are defined here.
-# Common settings (windows, quality, blink, paths, logging) are inherited from default.yaml.
+
+# Random seed for reproducibility
+seed: 42
+
+# Windowing parameters (must match extraction settings)
+windows:
+  length_s: 10.0
+  step_s: 2.5
+
+# Quality control thresholds
+quality:
+  min_face_conf: 0.5
+  max_bad_frame_ratio: 0.05
+
+# Blink detection parameters
+blink:
+  ear_thresh: 0.21
+  min_blink_ms: 120
+  max_blink_ms: 400
+
+# Feature flags
+features_enabled:
+  tepr: false
+  blinks: true
+  perclos: true
+  brightness: true
+  geometry: true
+  fix_sac: false
+  gaze_entropy: false
 
 # Task mode: "classification" or "regression"
 task_mode: "regression"
@@ -50,3 +76,18 @@ eval:
   metrics: ["mae", "rmse", "spearman", "r2"]
   report_window_level: true   # Also report window-level metrics (for debugging)
   report_session_level: true  # Primary evaluation level
+
+# Target column for training
+# Primary: "load_0_1" from self-report assessments (defensible ground truth)
+# The physiological teacher model is used for independent *validation*,
+# not for generating training labels.
+target:
+  column: "load_0_1"
+
+# Physiological validation (independent secondary metric)
+# If a physio_labels CSV is provided at training time, within-subject
+# Spearman correlation between predictions and physio arousal is reported.
+physio_validation:
+  enabled: true
+  # Path to physio_stress_labels.csv (window-level physio scores)
+  labels_path: "data/processed/physio_stress_labels.csv"

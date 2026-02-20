@@ -53,10 +53,20 @@ data/processed/
 !data/raw/manifest.csv
 Dataset/AVCAffe
 
+# Machine Learning artifacts
+Machine Learning/data/processed/
+Machine Learning/reports/
+Machine Learning/logs/
+
 # Models
 models/*.joblib
 models/*.pkl
 !models/feature_spec.json
+
+# Machine Learning models: ignore by default (allowlist tracked demo models)
+Machine Learning/models/*
+!Machine Learning/models/video_physio_regression_z01_geom/
+!Machine Learning/models/video_physio_regression_z01_geom/**
 
 # Archived models (not pushed to repo)
 Machine Learning/models/archive/
@@ -91,3 +101,5 @@ ui/.env.production.local
 
 #Ignore Videos Folder
 Videos/
+
+Physiological/

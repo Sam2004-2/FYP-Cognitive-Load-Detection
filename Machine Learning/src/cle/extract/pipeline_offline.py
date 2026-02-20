@@ -7,7 +7,7 @@ Extracts features from video files in batch mode.
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pandas as pd
 from tqdm import tqdm
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 def process_video(
     video_path: str,
-    config: Dict,
+    config,
     extractor: FaceMeshExtractor,
     video_metadata: Dict,
 ) -> List[Dict]:
@@ -86,7 +86,7 @@ def process_video(
 def extract_windows(
     frame_features: List[Dict],
     fps: float,
-    config: Dict,
+    config,
     video_metadata: Dict,
 ) -> List[Dict]:
     """
@@ -105,8 +105,8 @@ def extract_windows(
     windows = sliding_window_indices(
         n_frames=len(frame_features),
         fps=fps,
-        length_s=config.get("windows.length_s", 20.0),
-        step_s=config.get("windows.step_s", 5.0),
+        length_s=config.get("windows.length_s", 10.0),
+        step_s=config.get("windows.step_s", 2.5),
     )
 
     window_features_list = []
@@ -118,7 +118,7 @@ def extract_windows(
         # Validate window quality
         is_valid, bad_ratio = validate_window_quality(
             window_data,
-            max_bad_ratio=config.get("quality.max_bad_frame_ratio", 0.2),
+            max_bad_ratio=config.get("quality.max_bad_frame_ratio", 0.05),
         )
 
         if not is_valid:
@@ -129,13 +129,14 @@ def extract_windows(
             continue
 
         # Compute window features
-        window_features = compute_window_features(window_data, config, fps)
+        window_features = compute_window_features(window_data, config.to_dict(), fps)
 
         # Add metadata
         window_features.update({
             "t_start_s": start_time_s,
             "t_end_s": end_time_s,
             "user_id": video_metadata["user_id"],
+            "task": video_metadata.get("task"),
             "video": video_metadata["video_file"],
             "label": video_metadata["label"],
             "role": video_metadata["role"],
@@ -181,6 +182,12 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level",
     )
+    parser.add_argument(
+        "--max-videos",
+        type=int,
+        default=0,
+        help="Maximum number of videos to process (0 = all).",
+    )
 
     args = parser.parse_args()
 
@@ -202,6 +209,9 @@ def main():
 
     manifest = load_manifest(str(manifest_path))
     logger.info(f"Loaded manifest with {len(manifest)} videos")
+    if args.max_videos and args.max_videos > 0:
+        manifest = manifest.head(args.max_videos).copy()
+        logger.info(f"Limiting to first {len(manifest)} videos due to --max-videos")
 
     # Initialize face mesh extractor
     with FaceMeshExtractor(
@@ -233,6 +243,11 @@ def main():
                 "label": row["label"],
                 "role": row["role"],
                 "user_id": row["user_id"],
+                "task": (
+                    row["task"]
+                    if "task" in manifest.columns and pd.notna(row.get("task"))
+                    else Path(video_file).stem.split("_", 1)[-1] if "_" in Path(video_file).stem else "unknown"
+                ),
             }
 
             try:
@@ -240,7 +255,7 @@ def main():
                     # Process video to get per-frame features
                     frame_features = process_video(
                         str(video_path),
-                        config.to_dict(),
+                        config,
                         extractor,
                         video_metadata,
                     )
@@ -254,7 +269,7 @@ def main():
                     window_features = extract_windows(
                         frame_features,
                         fps,
-                        config.to_dict(),
+                        config,
                         video_metadata,
                     )
 
@@ -271,16 +286,22 @@ def main():
 
     df = pd.DataFrame(all_window_features)
 
-    # Reorder columns: metadata first, then features
+    # Reorder columns: metadata first, then model features, then monitoring features
     feature_names = get_feature_names(config.to_dict())
-    metadata_cols = ["user_id", "video", "label", "role", "t_start_s", "t_end_s"]
+    metadata_cols = ["user_id", "task", "video", "label", "role", "t_start_s", "t_end_s"]
     ordered_cols = metadata_cols + feature_names
 
-    # Ensure all columns exist
+    # Ensure all model columns exist
     for col in ordered_cols:
         if col not in df.columns:
             logger.warning(f"Missing column {col}, adding with zeros")
-            df[col] = 0.0
+            df[col] = "" if col in metadata_cols else 0.0
+
+    # Also keep monitoring/quality columns that are computed but not model inputs
+    monitoring_cols = ["mean_brightness", "std_brightness", "mean_quality", "valid_frame_ratio"]
+    for col in monitoring_cols:
+        if col in df.columns and col not in ordered_cols:
+            ordered_cols.append(col)
 
     df = df[ordered_cols]
 
