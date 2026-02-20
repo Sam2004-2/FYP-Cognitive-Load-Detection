@@ -18,7 +18,6 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [faceDetected, setFaceDetected] = useState<boolean>(false);
@@ -144,7 +143,6 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
-        setStream(null);
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -166,7 +164,6 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
         })
         .then((mediaStream) => {
           streamRef.current = mediaStream;
-          setStream(mediaStream);
           if (videoRef.current) {
             videoRef.current.srcObject = mediaStream;
           }
