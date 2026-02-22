@@ -186,3 +186,38 @@ export interface StudySetupState {
 export interface StudySummaryState {
   record: StudySessionRecord;
 }
+
+export interface StudyParticipantIdentity {
+  participantId: string;
+  createdAtIso: string;
+}
+
+export interface StudySessionUploadResponse {
+  success: boolean;
+  recordId: string;
+  storedAtIso: string;
+}
+
+export interface StudyDelayedUploadResponse {
+  success: boolean;
+  recordId: string;
+  storedAtIso: string;
+}
+
+export interface PendingDelayedTask {
+  linkedSessionRecordId: string;
+  participantId: string;
+  sessionNumber: StudySessionNumber;
+  condition: StudyCondition;
+  form: StudyForm;
+  dueAtIso: string;
+  easyItems: StudyStimulusItem[];
+  hardItems: StudyStimulusItem[];
+}
+
+export interface AdminExportQuery {
+  participantId?: string;
+  fromIso?: string;
+  toIso?: string;
+  format?: 'zip' | 'json';
+}

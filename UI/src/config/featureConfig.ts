@@ -53,7 +53,7 @@ export const FEATURE_CONFIG = {
   /** Backend API configuration */
   api: {
     /** Base URL for backend API */
-    base_url: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+    base_url: process.env.REACT_APP_API_URL || '',
   },
 } as const;
 

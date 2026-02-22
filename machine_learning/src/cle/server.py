@@ -6,14 +6,20 @@ Provides REST API endpoints for real-time cognitive load estimation.
 
 import argparse
 import csv
+import io
+import json
 import os
+import re
+import secrets
 import sys
-from datetime import datetime
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.cle.api import load_model, predict_window
@@ -25,6 +31,205 @@ logger = get_logger(__name__)
 # Global state for model artifacts
 artifacts: Optional[Dict] = None
 config: Optional[Dict] = None
+
+SAFE_SEGMENT_PATTERN = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def utc_now_iso() -> str:
+    """Return current UTC timestamp in ISO 8601 format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def parse_iso8601(value: str) -> datetime:
+    """Parse an ISO timestamp into a timezone-aware UTC datetime."""
+    cleaned = value.strip().replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(cleaned)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def normalize_storage_segment(raw: str, label: str) -> str:
+    """Normalise a user-provided segment for safe filesystem use."""
+    safe = SAFE_SEGMENT_PATTERN.sub("-", raw.strip())
+    safe = safe.strip("-")
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}")
+    return safe[:128]
+
+
+def get_reports_root() -> Path:
+    """Return persistent reports root, creating it on demand."""
+    root = Path(os.environ.get("CLE_REPORTS_DIR", "data/reports"))
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def write_json_file(path: Path, payload: Dict[str, Any]) -> None:
+    """Write JSON payload to disk with pretty formatting."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+
+
+def read_json_file(path: Path) -> Dict[str, Any]:
+    """Read a JSON file from disk."""
+    with path.open("r", encoding="utf-8") as handle:
+        loaded = json.load(handle)
+    if not isinstance(loaded, dict):
+        raise ValueError("Expected JSON object")
+    return loaded
+
+
+def configured_allowed_origins() -> List[str]:
+    """Resolve allowed CORS origins from env."""
+    raw = os.environ.get("CLE_ALLOWED_ORIGINS", "*").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def require_admin_token(authorization: Optional[str]) -> None:
+    """Validate admin bearer token for protected endpoints."""
+    configured_token = os.environ.get("CLE_ADMIN_TOKEN", "").strip()
+    if not configured_token:
+        raise HTTPException(status_code=503, detail="Admin token is not configured")
+
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    prefix = "Bearer "
+    if not authorization.startswith(prefix):
+        raise HTTPException(status_code=401, detail="Authorization must be a Bearer token")
+
+    provided = authorization[len(prefix):].strip()
+    if not provided or not secrets.compare_digest(provided, configured_token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+def record_event_time(record: Dict[str, Any]) -> Optional[datetime]:
+    """Pick the most relevant event timestamp for filtering/indexing."""
+    for key in ("completedAtIso", "startedAtIso", "dueAtIso"):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            try:
+                return parse_iso8601(value)
+            except ValueError:
+                continue
+    return None
+
+
+def derive_learning_items(record: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """Derive easy/hard learning items from a stored session record."""
+    trials = record.get("trials")
+    if not isinstance(trials, list):
+        return {"easy": [], "hard": []}
+
+    unique_items: Dict[str, Dict[str, Any]] = {}
+    for trial in trials:
+        if not isinstance(trial, dict):
+            continue
+        if trial.get("kind") != "learning":
+            continue
+
+        item_id = trial.get("itemId")
+        if not isinstance(item_id, str) or not item_id:
+            continue
+        if item_id in unique_items:
+            continue
+
+        interference_group = "-".join(item_id.split("-")[:2]) if "-" in item_id else item_id
+        unique_items[item_id] = {
+            "id": item_id,
+            "cue": trial.get("cue", ""),
+            "target": trial.get("target", ""),
+            "difficulty": trial.get("difficulty", ""),
+            "interferenceGroup": interference_group,
+        }
+
+    items = list(unique_items.values())
+    easy = [item for item in items if item.get("difficulty") == "easy"]
+    hard = [item for item in items if item.get("difficulty") == "hard"]
+    return {"easy": easy, "hard": hard}
+
+
+def ensure_required_fields(record: Dict[str, Any], required: List[str], label: str) -> None:
+    """Validate record has required fields."""
+    missing = [key for key in required if not record.get(key)]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"{label} missing required fields: {', '.join(missing)}")
+
+
+def iter_record_files(kind: Literal["sessions", "delayed"], participant_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Load stored report records from disk with metadata."""
+    root = get_reports_root() / kind
+    if not root.exists():
+        return []
+
+    participants: List[Path]
+    if participant_id:
+        participant_safe = normalize_storage_segment(participant_id, "participant_id")
+        participant_dir = root / participant_safe
+        participants = [participant_dir] if participant_dir.exists() else []
+    else:
+        participants = [path for path in root.iterdir() if path.is_dir()]
+
+    loaded: List[Dict[str, Any]] = []
+    for participant_dir in participants:
+        for json_file in sorted(participant_dir.glob("*.json")):
+            try:
+                payload = read_json_file(json_file)
+            except Exception as err:
+                logger.warning(f"Skipping invalid JSON file {json_file}: {err}")
+                continue
+
+            event_time = record_event_time(payload)
+            stored_at_iso = datetime.fromtimestamp(json_file.stat().st_mtime, tz=timezone.utc).isoformat()
+            loaded.append(
+                {
+                    "kind": kind,
+                    "participant_id": participant_dir.name,
+                    "record_id": json_file.stem,
+                    "path": json_file,
+                    "event_time": event_time,
+                    "event_time_iso": event_time.isoformat() if event_time else None,
+                    "stored_at_iso": stored_at_iso,
+                    "payload": payload,
+                }
+            )
+    return loaded
+
+
+def filter_records(
+    records: List[Dict[str, Any]],
+    from_dt: Optional[datetime],
+    to_dt: Optional[datetime],
+) -> List[Dict[str, Any]]:
+    """Apply optional event-time filters to report records."""
+    if not from_dt and not to_dt:
+        return records
+
+    filtered: List[Dict[str, Any]] = []
+    for record in records:
+        event_time = record.get("event_time")
+        if event_time is None:
+            continue
+        if from_dt and event_time < from_dt:
+            continue
+        if to_dt and event_time > to_dt:
+            continue
+        filtered.append(record)
+    return filtered
+
+
+def parse_time_filter(label: str, value: Optional[str]) -> Optional[datetime]:
+    """Parse optional query-time filter."""
+    if not value:
+        return None
+    try:
+        return parse_iso8601(value)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}: {err}") from err
 
 
 class PredictionRequest(BaseModel):
@@ -87,6 +292,72 @@ class TrainingDataResponse(BaseModel):
     message: Optional[str] = None
 
 
+class StudyParticipantResponse(BaseModel):
+    """Generated participant identifier response."""
+
+    participant_id: str
+    created_at_iso: str
+
+
+class StudySessionUploadRequest(BaseModel):
+    """Session record upload request."""
+
+    record: Dict[str, Any]
+
+
+class StudyDelayedUploadRequest(BaseModel):
+    """Delayed record upload request."""
+
+    record: Dict[str, Any]
+
+
+class StudyUploadResponse(BaseModel):
+    """Record upload response."""
+
+    success: bool
+    record_id: str
+    stored_at_iso: str
+
+
+class PendingDelayedTask(BaseModel):
+    """Pending delayed test descriptor."""
+
+    linked_session_record_id: str
+    participant_id: str
+    session_number: int
+    condition: str
+    form: str
+    due_at_iso: str
+    easy_items: List[Dict[str, Any]]
+    hard_items: List[Dict[str, Any]]
+
+
+class PendingDelayedResponse(BaseModel):
+    """Pending delayed tests for a participant."""
+
+    participant_id: str
+    pending: List[PendingDelayedTask]
+
+
+class ReportMetadata(BaseModel):
+    """Metadata about a stored report record."""
+
+    participant_id: str
+    kind: str
+    record_id: str
+    event_time_iso: Optional[str]
+    stored_at_iso: str
+    path: str
+
+
+class ReportIndexResponse(BaseModel):
+    """Admin report index response."""
+
+    generated_at_iso: str
+    count: int
+    records: List[ReportMetadata]
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Cognitive Load Estimation API",
@@ -94,11 +365,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
+allowed_origins = configured_allowed_origins()
+allow_wildcard = allowed_origins == ["*"]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict to specific origins
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=not allow_wildcard,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -150,6 +424,12 @@ async def root():
             "POST /predict": "Make cognitive load prediction",
             "GET /health": "Health check",
             "GET /model-info": "Model information",
+            "POST /study/participants": "Generate participant identifier",
+            "POST /study/session-records": "Upload completed session JSON",
+            "POST /study/delayed-records": "Upload completed delayed test JSON",
+            "GET /study/pending-delayed/{participant_id}": "Fetch pending delayed tasks",
+            "GET /admin/reports/index": "List stored reports (admin token required)",
+            "GET /admin/reports/export": "Export stored reports (admin token required)",
         },
     }
 
@@ -287,7 +567,6 @@ async def save_training_data(request: TrainingDataRequest):
 
         # Also save session metadata as JSON sidecar
         metadata_path = filepath.with_suffix(".json")
-        import json
         metadata = {
             "participant_id": request.participant_id,
             "session_notes": request.session_notes,
@@ -316,6 +595,216 @@ async def save_training_data(request: TrainingDataRequest):
     except Exception as e:
         logger.error(f"Failed to save training data: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save data: {str(e)}")
+
+
+@app.post("/study/participants", response_model=StudyParticipantResponse)
+async def create_study_participant():
+    """Generate a participant identifier for public study flow."""
+    created_at_iso = utc_now_iso()
+    suffix = secrets.token_hex(3).upper()
+    participant_id = f"P-{datetime.now(timezone.utc):%y%m%d}-{suffix}"
+    return StudyParticipantResponse(participant_id=participant_id, created_at_iso=created_at_iso)
+
+
+@app.post("/study/session-records", response_model=StudyUploadResponse)
+async def upload_session_record(request: StudySessionUploadRequest):
+    """Persist a session record JSON payload."""
+    record = request.record
+    ensure_required_fields(
+        record,
+        ["recordId", "participantId", "sessionNumber", "condition", "form", "startedAtIso"],
+        "Session record",
+    )
+
+    participant_id = normalize_storage_segment(str(record["participantId"]), "participant_id")
+    record_id = normalize_storage_segment(str(record["recordId"]), "record_id")
+
+    output_path = get_reports_root() / "sessions" / participant_id / f"{record_id}.json"
+    stored_at_iso = utc_now_iso()
+
+    payload = dict(record)
+    payload["_serverStoredAtIso"] = stored_at_iso
+    write_json_file(output_path, payload)
+
+    logger.info(f"Stored session record: {output_path}")
+    return StudyUploadResponse(success=True, record_id=record_id, stored_at_iso=stored_at_iso)
+
+
+@app.post("/study/delayed-records", response_model=StudyUploadResponse)
+async def upload_delayed_record(request: StudyDelayedUploadRequest):
+    """Persist a delayed test record JSON payload."""
+    record = request.record
+    ensure_required_fields(
+        record,
+        [
+            "recordId",
+            "participantId",
+            "linkedSessionRecordId",
+            "sessionNumber",
+            "condition",
+            "form",
+            "dueAtIso",
+        ],
+        "Delayed record",
+    )
+
+    participant_id = normalize_storage_segment(str(record["participantId"]), "participant_id")
+    record_id = normalize_storage_segment(str(record["recordId"]), "record_id")
+
+    output_path = get_reports_root() / "delayed" / participant_id / f"{record_id}.json"
+    stored_at_iso = utc_now_iso()
+
+    payload = dict(record)
+    payload["_serverStoredAtIso"] = stored_at_iso
+    write_json_file(output_path, payload)
+
+    logger.info(f"Stored delayed record: {output_path}")
+    return StudyUploadResponse(success=True, record_id=record_id, stored_at_iso=stored_at_iso)
+
+
+@app.get("/study/pending-delayed/{participant_id}", response_model=PendingDelayedResponse)
+async def get_pending_delayed(participant_id: str):
+    """Return pending delayed tasks for a participant using stored server records."""
+    participant_safe = normalize_storage_segment(participant_id, "participant_id")
+
+    session_records = iter_record_files("sessions", participant_safe)
+    delayed_records = iter_record_files("delayed", participant_safe)
+
+    completed_links = {
+        str(entry["payload"].get("linkedSessionRecordId", ""))
+        for entry in delayed_records
+        if isinstance(entry.get("payload"), dict)
+    }
+
+    pending: List[PendingDelayedTask] = []
+    for entry in session_records:
+        payload = entry["payload"]
+        record_id = str(payload.get("recordId", ""))
+        if not record_id:
+            continue
+
+        pending_flag = bool(payload.get("pendingDelayedTest", True))
+        if not pending_flag:
+            continue
+        if record_id in completed_links:
+            continue
+
+        items = derive_learning_items(payload)
+
+        pending.append(
+            PendingDelayedTask(
+                linked_session_record_id=record_id,
+                participant_id=participant_safe,
+                session_number=int(payload.get("sessionNumber", 1)),
+                condition=str(payload.get("condition", "baseline")),
+                form=str(payload.get("form", "A")),
+                due_at_iso=str(payload.get("delayedDueAtIso") or utc_now_iso()),
+                easy_items=items["easy"],
+                hard_items=items["hard"],
+            )
+        )
+
+    pending.sort(key=lambda task: task.due_at_iso)
+    return PendingDelayedResponse(participant_id=participant_safe, pending=pending)
+
+
+@app.get("/admin/reports/index", response_model=ReportIndexResponse)
+async def admin_report_index(
+    participant_id: Optional[str] = Query(None),
+    from_iso: Optional[str] = Query(None),
+    to_iso: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+):
+    """List report metadata for admin access."""
+    require_admin_token(authorization)
+
+    from_dt = parse_time_filter("from_iso", from_iso)
+    to_dt = parse_time_filter("to_iso", to_iso)
+    participant_filter = normalize_storage_segment(participant_id, "participant_id") if participant_id else None
+
+    records = iter_record_files("sessions", participant_filter) + iter_record_files("delayed", participant_filter)
+    records = filter_records(records, from_dt, to_dt)
+
+    metadata = [
+        ReportMetadata(
+            participant_id=entry["participant_id"],
+            kind=entry["kind"],
+            record_id=entry["record_id"],
+            event_time_iso=entry["event_time_iso"],
+            stored_at_iso=entry["stored_at_iso"],
+            path=str(entry["path"]),
+        )
+        for entry in sorted(records, key=lambda item: item["stored_at_iso"])
+    ]
+
+    return ReportIndexResponse(
+        generated_at_iso=utc_now_iso(),
+        count=len(metadata),
+        records=metadata,
+    )
+
+
+@app.get("/admin/reports/export")
+async def admin_report_export(
+    participant_id: Optional[str] = Query(None),
+    from_iso: Optional[str] = Query(None),
+    to_iso: Optional[str] = Query(None),
+    format: Literal["zip", "json"] = Query("zip"),
+    authorization: Optional[str] = Header(None),
+):
+    """Export report payloads in JSON bundle or ZIP format."""
+    require_admin_token(authorization)
+
+    from_dt = parse_time_filter("from_iso", from_iso)
+    to_dt = parse_time_filter("to_iso", to_iso)
+    participant_filter = normalize_storage_segment(participant_id, "participant_id") if participant_id else None
+
+    records = iter_record_files("sessions", participant_filter) + iter_record_files("delayed", participant_filter)
+    records = filter_records(records, from_dt, to_dt)
+    records = sorted(records, key=lambda item: item["stored_at_iso"])
+
+    if format == "json":
+        payload = {
+            "generated_at_iso": utc_now_iso(),
+            "count": len(records),
+            "records": [
+                {
+                    "participant_id": entry["participant_id"],
+                    "kind": entry["kind"],
+                    "record_id": entry["record_id"],
+                    "event_time_iso": entry["event_time_iso"],
+                    "stored_at_iso": entry["stored_at_iso"],
+                    "payload": entry["payload"],
+                }
+                for entry in records
+            ],
+        }
+        return JSONResponse(content=payload)
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        manifest = {
+            "generated_at_iso": utc_now_iso(),
+            "count": len(records),
+            "filters": {
+                "participant_id": participant_filter,
+                "from_iso": from_iso,
+                "to_iso": to_iso,
+            },
+        }
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2))
+
+        for entry in records:
+            relative_name = f"{entry['kind']}/{entry['participant_id']}/{entry['record_id']}.json"
+            archive.writestr(relative_name, json.dumps(entry["payload"], indent=2))
+
+    buffer.seek(0)
+    filename = f"study_reports_{datetime.now(timezone.utc):%Y%m%d_%H%M%S}.zip"
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def main():

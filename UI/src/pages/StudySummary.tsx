@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import NasaTLXForm from '../components/NasaTLXForm';
+import { StudyAPIError, uploadSessionRecord } from '../services/studyApiClient';
 import { finalizeSession, exportStudyPackage } from '../services/studyStorage';
 import { createDelayedPacket } from '../services/studyStimuli';
 import { triggerDownload } from '../services/studyExport';
@@ -39,7 +40,9 @@ const StudySummary: React.FC = () => {
   const state = location.state as StudySummaryState | undefined;
 
   const [record, setRecord] = useState<StudySessionRecord | null>(state?.record ?? null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(Boolean(state?.record?.nasaTlx));
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
 
   const summary = useMemo(() => {
     if (!record) return null;
@@ -80,7 +83,7 @@ const StudySummary: React.FC = () => {
     );
   }
 
-  const submitTlx = (scores: NASATLXScores) => {
+  const submitTlx = async (scores: NASATLXScores) => {
     const updated: StudySessionRecord = {
       ...record,
       nasaTlx: scores,
@@ -89,6 +92,23 @@ const StudySummary: React.FC = () => {
     setRecord(updated);
     finalizeSession(updated);
     setSaved(true);
+
+    setUploadStatus('uploading');
+    setUploadMessage('Uploading session record to study server...');
+
+    try {
+      const response = await uploadSessionRecord(updated);
+      setUploadStatus('success');
+      setUploadMessage(`Upload complete. Record ${response.recordId} stored at ${new Date(response.storedAtIso).toLocaleString()}.`);
+    } catch (err) {
+      console.error('Session upload failed:', err);
+      setUploadStatus('error');
+      if (err instanceof StudyAPIError) {
+        setUploadMessage(`Upload failed (${err.status ?? 'unknown'}). Use backup export buttons below.`);
+      } else {
+        setUploadMessage('Upload failed. Use backup export buttons below.');
+      }
+    }
   };
 
   const exportSessionJson = () => {
@@ -166,44 +186,71 @@ const StudySummary: React.FC = () => {
           <NasaTLXForm
             title="NASA-TLX (Session-level)"
             submitLabel={saved ? 'NASA-TLX Saved' : 'Save NASA-TLX'}
-            onSubmit={submitTlx}
+            onSubmit={(scores) => {
+              void submitTlx(scores);
+            }}
           />
           {saved && (
             <div className="mt-3 text-sm text-green-700 bg-green-50 border border-green-100 rounded px-3 py-2">
-              Session record finalized and saved locally.
+              Session record finalized locally.
+            </div>
+          )}
+          {uploadStatus !== 'idle' && (
+            <div
+              className={`mt-3 text-sm rounded px-3 py-2 border ${
+                uploadStatus === 'error'
+                  ? 'text-red-700 bg-red-50 border-red-100'
+                  : uploadStatus === 'success'
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
+                  : 'text-blue-700 bg-blue-50 border-blue-100'
+              }`}
+            >
+              {uploadMessage}
             </div>
           )}
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-3">Exports</h2>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={exportSessionJson}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Export Session JSON
-            </button>
-            <button
-              onClick={exportDelayedPacket}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              Export Delayed Packet
-            </button>
-            <button
-              onClick={exportBundle}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              Export Participant Bundle (JSON + CSV)
-            </button>
-            <button
-              onClick={() => navigate('/study/delayed')}
-              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              Open Delayed Test Page
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-3">Next Step</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Keep your participant ID for delayed testing and your next session.
+          </p>
+          <button
+            onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
+            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            Open Delayed Test Page
+          </button>
         </div>
+
+        {uploadStatus === 'error' && (
+          <div className="bg-white rounded-lg border border-red-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-3">Backup Exports</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Upload failed, so download local backup files and send them to the researcher.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={exportSessionJson}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Export Session JSON
+              </button>
+              <button
+                onClick={exportDelayedPacket}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Export Delayed Packet
+              </button>
+              <button
+                onClick={exportBundle}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Export Participant Bundle (JSON + CSV)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

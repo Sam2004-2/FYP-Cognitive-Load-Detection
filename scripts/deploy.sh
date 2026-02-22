@@ -3,25 +3,39 @@ set -euo pipefail
 
 PROJECT_DIR="/opt/cle-app"
 COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+ENV_FILE="$PROJECT_DIR/.env.production"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-thesis/prune}"
 
 echo "=== CLE Deploy: $(date) ==="
 
-cd "$PROJECT_DIR"
-git pull origin deploy
+echo "Project directory: $PROJECT_DIR"
+echo "Deploy branch: $DEPLOY_BRANCH"
 
-docker compose -f "$COMPOSE_FILE" down --remove-orphans
-docker compose -f "$COMPOSE_FILE" up --build -d
+cd "$PROJECT_DIR"
+
+git fetch origin "$DEPLOY_BRANCH"
+git checkout "$DEPLOY_BRANCH"
+git pull --ff-only origin "$DEPLOY_BRANCH"
+
+COMPOSE_ARGS=("-f" "$COMPOSE_FILE")
+if [ -f "$ENV_FILE" ]; then
+  echo "Using environment file: $ENV_FILE"
+  COMPOSE_ARGS=("--env-file" "$ENV_FILE" "${COMPOSE_ARGS[@]}")
+fi
+
+docker compose "${COMPOSE_ARGS[@]}" down --remove-orphans
+docker compose "${COMPOSE_ARGS[@]}" up --build -d
 
 echo "Waiting for backend to become healthy..."
 
-MAX_WAIT=60
+MAX_WAIT=120
 INTERVAL=5
 ELAPSED=0
 
-until curl -sf http://localhost:8000/health | grep -q '"status":"healthy"'; do
+until docker compose "${COMPOSE_ARGS[@]}" exec -T backend curl -sf http://localhost:8000/health 2>/dev/null | grep -q '"status":"healthy"'; do
     if [ "$ELAPSED" -ge "$MAX_WAIT" ]; then
         echo "ERROR: Backend did not become healthy within ${MAX_WAIT}s"
-        docker compose -f "$COMPOSE_FILE" logs backend
+        docker compose "${COMPOSE_ARGS[@]}" logs backend
         exit 1
     fi
     echo "  Waiting... (${ELAPSED}s elapsed)"
@@ -31,11 +45,11 @@ done
 
 echo "Backend is healthy."
 
-if curl -sf http://localhost:80 > /dev/null; then
-    echo "Frontend is up."
+if curl -kfsS https://localhost/ >/dev/null || curl -fsS http://localhost/ >/dev/null; then
+    echo "Public frontend is up."
 else
-    echo "WARNING: Frontend did not respond on port 80"
-    docker compose -f "$COMPOSE_FILE" logs frontend
+    echo "ERROR: Frontend/Caddy endpoint did not respond"
+    docker compose "${COMPOSE_ARGS[@]}" logs caddy frontend
     exit 1
 fi
 

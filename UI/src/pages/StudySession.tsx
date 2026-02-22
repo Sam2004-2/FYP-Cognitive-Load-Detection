@@ -711,7 +711,7 @@ const StudySession: React.FC = () => {
             <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
               <h2 className="text-xl font-semibold text-gray-800">Session complete</h2>
               <p className="text-gray-600">
-                Proceed to summary to submit NASA-TLX and export study artifacts.
+                Proceed to summary to submit NASA-TLX and upload the study record.
               </p>
               <button
                 onClick={finishSession}

@@ -99,5 +99,9 @@ ui/.env.production.local
 *.temp
 .cache/
 
+# Deployment environment files
+.env.production
+.env.local
+
 # Ignore Data folder
 data/

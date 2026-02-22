@@ -1,14 +1,67 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { getPendingDelayedTasks } from '../services/studyApiClient';
 import { getStudyPlan, computeStudyAssignment, validateSession2Timing } from '../services/studyProtocol';
 import { getMostRecentSession, listPendingDelayedTests } from '../services/studyStorage';
-import { StudySessionNumber, StudySetupState } from '../types/study';
+import { PendingDelayedTask, StudySessionNumber, StudySetupState } from '../types/study';
+
+interface StudySetupRouteState {
+  participantId?: string;
+}
 
 const StudySetup: React.FC = () => {
   const navigate = useNavigate();
-  const [participantId, setParticipantId] = useState('');
+  const location = useLocation();
+  const routeState = location.state as StudySetupRouteState | undefined;
+
+  const [participantId, setParticipantId] = useState(routeState?.participantId ?? '');
   const [sessionNumber, setSessionNumber] = useState<StudySessionNumber>(1);
   const [allowEarlySession2, setAllowEarlySession2] = useState(false);
+
+  const [serverPending, setServerPending] = useState<PendingDelayedTask[]>([]);
+  const [serverPendingStatus, setServerPendingStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [serverPendingError, setServerPendingError] = useState('');
+
+  useEffect(() => {
+    if (routeState?.participantId) {
+      setParticipantId(routeState.participantId);
+    }
+  }, [routeState?.participantId]);
+
+  useEffect(() => {
+    const id = participantId.trim();
+    if (!id) {
+      setServerPending([]);
+      setServerPendingStatus('idle');
+      setServerPendingError('');
+      return;
+    }
+
+    let cancelled = false;
+    const loadPending = async () => {
+      setServerPendingStatus('loading');
+      setServerPendingError('');
+
+      try {
+        const tasks = await getPendingDelayedTasks(id);
+        if (cancelled) return;
+        setServerPending(tasks);
+        setServerPendingStatus('ready');
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Failed to fetch server pending delayed tasks:', err);
+        setServerPending([]);
+        setServerPendingStatus('error');
+        setServerPendingError('Could not load server pending delayed tasks. You can still continue this session.');
+      }
+    };
+
+    void loadPending();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [participantId]);
 
   const previousSession1 = useMemo(() => {
     if (!participantId.trim()) return null;
@@ -24,14 +77,13 @@ const StudySetup: React.FC = () => {
     return validateSession2Timing(sessionNumber, previousSession1?.completedAtIso);
   }, [sessionNumber, previousSession1?.completedAtIso]);
 
-  const pendingDelayed = useMemo(() => {
+  const localPendingDelayed = useMemo(() => {
     if (!participantId.trim()) return [];
     return listPendingDelayedTests(participantId.trim());
   }, [participantId]);
 
   const canStart = Boolean(
-    assignment &&
-      (!timingValidation.tooEarly || allowEarlySession2 || sessionNumber === 1)
+    assignment && (!timingValidation.tooEarly || allowEarlySession2 || sessionNumber === 1)
   );
 
   const handleStart = () => {
@@ -41,7 +93,8 @@ const StudySetup: React.FC = () => {
       participantId: participantId.trim(),
       assignment,
       plan: getStudyPlan(),
-      session2StartedEarlyOverride: sessionNumber === 2 ? allowEarlySession2 && timingValidation.tooEarly : false,
+      session2StartedEarlyOverride:
+        sessionNumber === 2 ? allowEarlySession2 && timingValidation.tooEarly : false,
     };
 
     navigate('/study/session', { state });
@@ -55,10 +108,7 @@ const StudySetup: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-800">Study Protocol Setup</h1>
             <p className="text-gray-600 mt-1">Configure crossover session assignment and launch run.</p>
           </div>
-          <button
-            onClick={() => navigate('/')}
-            className="text-gray-600 hover:text-gray-800"
-          >
+          <button onClick={() => navigate('/')} className="text-gray-600 hover:text-gray-800">
             Close
           </button>
         </div>
@@ -69,9 +119,12 @@ const StudySetup: React.FC = () => {
             <input
               value={participantId}
               onChange={(e) => setParticipantId(e.target.value)}
-              placeholder="e.g., P012"
+              placeholder="e.g., P-260222-A1B2C3"
               className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Use the participant ID generated on the landing page for both sessions and delayed tests.
+            </p>
           </div>
 
           <div>
@@ -119,19 +172,33 @@ const StudySetup: React.FC = () => {
             </div>
           )}
 
-          {pendingDelayed.length > 0 && (
-            <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 text-sm text-purple-900">
-              <div className="font-medium mb-2">Pending delayed tests for this participant:</div>
-              <ul className="list-disc list-inside space-y-1">
-                {pendingDelayed.map((session) => (
-                  <li key={session.recordId}>
-                    Session {session.sessionNumber} ({session.condition}) due {new Date(session.delayedDueAtIso).toLocaleDateString()}
-                  </li>
-                ))}
-              </ul>
+          {participantId.trim() && (
+            <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 text-sm text-purple-900 space-y-2">
+              <div className="font-medium">Pending delayed tests (server)</div>
+              {serverPendingStatus === 'loading' && <div>Checking server for pending delayed tests...</div>}
+              {serverPendingStatus === 'error' && <div>{serverPendingError}</div>}
+              {serverPendingStatus === 'ready' && serverPending.length === 0 && (
+                <div>No server-side delayed tests are pending for this participant.</div>
+              )}
+              {serverPendingStatus === 'ready' && serverPending.length > 0 && (
+                <ul className="list-disc list-inside space-y-1">
+                  {serverPending.map((task) => (
+                    <li key={`${task.linkedSessionRecordId}-${task.sessionNumber}`}>
+                      Session {task.sessionNumber} ({task.condition}) due {new Date(task.dueAtIso).toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {localPendingDelayed.length > 0 && (
+                <div className="text-xs text-purple-800">
+                  Local device also has {localPendingDelayed.length} pending delayed item(s).
+                </div>
+              )}
+
               <button
-                onClick={() => navigate('/study/delayed')}
-                className="mt-3 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => navigate('/study/delayed', { state: { participantId: participantId.trim() } })}
+                className="mt-1 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white"
               >
                 Open Delayed Test Page
               </button>
