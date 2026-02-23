@@ -1,15 +1,15 @@
 import { StudySessionPlan } from '../types/study';
 
 export const STUDY_CONFIG: StudySessionPlan = {
-  baselineSeconds: 60,
-  easyItemCount: 12,
-  easyExposureSeconds: 5.5,
-  hardItemCount: 18,
-  hardExposureSeconds: 3.5,
+  baselineSeconds: 45,
+  easyItemCount: 8,
+  easyExposureSeconds: 4.5,
+  hardItemCount: 10,
+  hardExposureSeconds: 3.0,
   hardInterferenceEnabled: true,
   recognitionChoices: 4,
-  microBreakSeconds: 60,
-  maxMicroBreaksPerSession: 2,
+  microBreakSeconds: 45,
+  maxMicroBreaksPerSession: 1,
   adaptationCooldownSeconds: 120,
   decisionWindowSeconds: 5,
   smoothingWindows: 3,

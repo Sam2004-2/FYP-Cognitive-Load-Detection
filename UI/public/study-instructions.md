@@ -25,7 +25,7 @@ Thank you for participating.
 5. Run the full study session and NASA-TLX form.
 6. The app uploads your session report automatically.
 
-Estimated duration: ~20-30 minutes per session.
+Estimated duration: ~10-15 minutes per session.
 
 ## Session 2 Timing
 

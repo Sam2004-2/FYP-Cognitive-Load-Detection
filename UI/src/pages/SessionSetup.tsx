@@ -80,7 +80,7 @@ const SessionSetup: React.FC = () => {
             <h2 className="text-xl font-semibold text-gray-800">Consent and Instructions</h2>
             <p className="text-gray-700 text-sm">
               Requirements: laptop/desktop with webcam, stable internet, quiet environment, and latest Chrome/Edge.
-              Keep your face centered with steady lighting. Session duration is approximately 20-30 minutes.
+              Keep your face centered with steady lighting. Session duration is approximately 10-15 minutes.
               You will need your participant ID again for Session 2 and delayed follow-up.
             </p>
             <a
