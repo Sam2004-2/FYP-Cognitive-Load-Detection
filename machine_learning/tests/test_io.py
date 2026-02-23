@@ -192,5 +192,38 @@ def test_load_model_artifact_does_not_retry_unrelated_value_error(monkeypatch):
             load_model_artifact(str(path))
 
 
+def test_load_model_artifact_retries_on_numpy_private_core_module(monkeypatch):
+    """Test retry path when legacy pickle imports numpy._core.* modules."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "legacy_private_core.bin"
+        path.write_bytes(b"placeholder")
+
+        calls = {"count": 0}
+
+        def fake_load(_path):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise ModuleNotFoundError("No module named 'numpy._core.numeric'")
+            return {"loaded": True}
+
+        monkeypatch.setattr("src.cle.utils.io.joblib.load", fake_load)
+
+        patch_called = {"value": False}
+
+        def fake_patch():
+            patch_called["value"] = True
+            return True
+
+        monkeypatch.setattr(
+            "src.cle.utils.io.install_numpy_private_core_aliases",
+            fake_patch,
+        )
+
+        loaded = load_model_artifact(str(path))
+        assert loaded == {"loaded": True}
+        assert calls["count"] == 2
+        assert patch_called["value"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

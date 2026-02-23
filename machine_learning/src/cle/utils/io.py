@@ -6,6 +6,7 @@ Functions for reading videos, loading/saving CSVs, and model serialization.
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -53,6 +54,35 @@ def install_numpy_bitgenerator_compatibility_patch() -> bool:
     setattr(numpy_pickle, ctor_name, compat_ctor)
     logger.warning("Applied NumPy bit-generator compatibility patch for legacy model artifacts")
     return True
+
+
+def install_numpy_private_core_aliases() -> bool:
+    """
+    Alias legacy NumPy private module paths used by older pickles.
+
+    Some artifacts reference ``numpy._core.numeric`` while NumPy 1.x exposes
+    modules under ``numpy.core``. Adding import aliases allows unpickling.
+    """
+    changed = False
+
+    try:
+        import numpy.core as np_core  # type: ignore[attr-defined]
+        import numpy.core.numeric as np_core_numeric  # type: ignore[attr-defined]
+    except Exception:
+        return False
+
+    if "numpy._core" not in sys.modules:
+        sys.modules["numpy._core"] = np_core
+        changed = True
+
+    if "numpy._core.numeric" not in sys.modules:
+        sys.modules["numpy._core.numeric"] = np_core_numeric
+        changed = True
+
+    if changed:
+        logger.warning("Applied NumPy private-core alias compatibility patch for legacy model artifacts")
+
+    return changed
 
 
 def open_video(video_path: str) -> Tuple[cv2.VideoCapture, Dict[str, Any]]:
@@ -232,19 +262,37 @@ def load_model_artifact(path: str) -> Any:
     if not path.exists():
         raise FileNotFoundError(f"Model artifact not found: {path}")
 
-    try:
-        obj = joblib.load(path)
-    except ValueError as err:
-        if "not a known BitGenerator module" not in str(err):
-            raise
+    patched_bitgenerator = False
+    patched_private_core = False
 
-        if not install_numpy_bitgenerator_compatibility_patch():
-            raise
+    while True:
+        try:
+            obj = joblib.load(path)
+            break
+        except ValueError as err:
+            if "not a known BitGenerator module" not in str(err):
+                raise
+            if patched_bitgenerator:
+                raise
+            if not install_numpy_bitgenerator_compatibility_patch():
+                raise
+            patched_bitgenerator = True
+            logger.warning(
+                "Retrying model artifact load after applying NumPy bit-generator compatibility patch"
+            )
+        except ModuleNotFoundError as err:
+            missing_name = err.name or str(err)
+            if "numpy._core" not in missing_name:
+                raise
+            if patched_private_core:
+                raise
+            if not install_numpy_private_core_aliases():
+                raise
+            patched_private_core = True
+            logger.warning(
+                "Retrying model artifact load after applying NumPy private-core alias compatibility patch"
+            )
 
-        logger.warning(
-            "Retrying model artifact load after applying NumPy bit-generator compatibility patch"
-        )
-        obj = joblib.load(path)
     logger.info(f"Loaded model artifact from {path.name}")
     return obj
 
