@@ -5,6 +5,7 @@ Functions for reading videos, loading/saving CSVs, and model serialization.
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -16,6 +17,42 @@ import pandas as pd
 from src.cle.logging_setup import get_logger
 
 logger = get_logger(__name__)
+
+
+def install_numpy_bitgenerator_compatibility_patch() -> bool:
+    """
+    Patch numpy's private bit-generator constructor for legacy pickles.
+
+    Some older model artifacts store bit-generator state with class objects
+    instead of string names (for example ``<class '...MT19937'>``). Newer NumPy
+    versions expect the generator name as a string and raise:
+    "not a known BitGenerator module".
+    """
+    numpy_pickle = getattr(np.random, "_pickle", None)
+    if numpy_pickle is None:
+        return False
+
+    ctor_name = "__bit_generator_ctor"
+    original_ctor = getattr(numpy_pickle, ctor_name, None)
+    if original_ctor is None:
+        return False
+
+    if getattr(original_ctor, "_cle_compat_wrapped", False):
+        return True
+
+    def compat_ctor(bit_generator_name="MT19937"):  # type: ignore[no-untyped-def]
+        if isinstance(bit_generator_name, type):
+            bit_generator_name = bit_generator_name.__name__
+        elif isinstance(bit_generator_name, str) and bit_generator_name.startswith("<class "):
+            match = re.search(r"\.([A-Za-z0-9_]+)'>$", bit_generator_name)
+            if match:
+                bit_generator_name = match.group(1)
+        return original_ctor(bit_generator_name)
+
+    setattr(compat_ctor, "_cle_compat_wrapped", True)
+    setattr(numpy_pickle, ctor_name, compat_ctor)
+    logger.warning("Applied NumPy bit-generator compatibility patch for legacy model artifacts")
+    return True
 
 
 def open_video(video_path: str) -> Tuple[cv2.VideoCapture, Dict[str, Any]]:
@@ -195,7 +232,19 @@ def load_model_artifact(path: str) -> Any:
     if not path.exists():
         raise FileNotFoundError(f"Model artifact not found: {path}")
 
-    obj = joblib.load(path)
+    try:
+        obj = joblib.load(path)
+    except ValueError as err:
+        if "not a known BitGenerator module" not in str(err):
+            raise
+
+        if not install_numpy_bitgenerator_compatibility_patch():
+            raise
+
+        logger.warning(
+            "Retrying model artifact load after applying NumPy bit-generator compatibility patch"
+        )
+        obj = joblib.load(path)
     logger.info(f"Loaded model artifact from {path.name}")
     return obj
 
@@ -240,4 +289,3 @@ def load_json(path: str) -> Dict[str, Any]:
 
     logger.info(f"Loaded JSON from {path.name}")
     return data
-

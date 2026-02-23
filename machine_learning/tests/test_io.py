@@ -142,5 +142,55 @@ def test_save_and_load_numpy_artifact():
         np.testing.assert_array_equal(loaded, arr)
 
 
+def test_load_model_artifact_retries_on_legacy_numpy_bitgenerator(monkeypatch):
+    """Test retry path for legacy NumPy bit-generator pickle incompatibility."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "legacy_model.bin"
+        path.write_bytes(b"placeholder")
+
+        calls = {"count": 0}
+
+        def fake_load(_path):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise ValueError(
+                    "<class 'numpy.random._mt19937.MT19937'> is not a known BitGenerator module."
+                )
+            return {"ok": True}
+
+        monkeypatch.setattr("src.cle.utils.io.joblib.load", fake_load)
+
+        patch_called = {"value": False}
+
+        def fake_patch():
+            patch_called["value"] = True
+            return True
+
+        monkeypatch.setattr(
+            "src.cle.utils.io.install_numpy_bitgenerator_compatibility_patch",
+            fake_patch,
+        )
+
+        loaded = load_model_artifact(str(path))
+        assert loaded == {"ok": True}
+        assert calls["count"] == 2
+        assert patch_called["value"]
+
+
+def test_load_model_artifact_does_not_retry_unrelated_value_error(monkeypatch):
+    """Test unrelated ValueError is re-raised without compatibility patching."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "broken_model.bin"
+        path.write_bytes(b"placeholder")
+
+        def fake_load(_path):
+            raise ValueError("corrupted artifact")
+
+        monkeypatch.setattr("src.cle.utils.io.joblib.load", fake_load)
+
+        with pytest.raises(ValueError, match="corrupted artifact"):
+            load_model_artifact(str(path))
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
