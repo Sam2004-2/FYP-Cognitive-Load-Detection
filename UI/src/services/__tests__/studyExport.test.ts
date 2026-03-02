@@ -34,6 +34,24 @@ function makeSession(overrides: Partial<StudySessionRecord> = {}): StudySessionR
         qualityFlags: { lowValidFrameRatio: false, unstableIllumination: false },
       },
     ],
+    featureWindows: [
+      {
+        timestampMs: 500,
+        sessionTimeS: 0.5,
+        phase: 'baseline_calibration',
+        windowIndex: 0,
+        isCalibration: true,
+        features: { blink_rate: 14, blink_count: 2 },
+      },
+      {
+        timestampMs: 1000,
+        sessionTimeS: 1,
+        phase: 'learning_easy',
+        windowIndex: 1,
+        isCalibration: false,
+        features: { blink_rate: 18, blink_count: 3, blink_rate_centered: 4, blink_count_centered: 1 },
+      },
+    ],
     trials: [
       {
         trialId: 't1',
@@ -132,6 +150,8 @@ describe('buildStudyExportTables', () => {
     expect(tables.session_summary).toContain('record_id');
     expect(tables.session_summary).toContain('rec_1');
     expect(tables.cli_windows).toContain('raw_cli');
+    expect(tables.feature_windows).toContain('blink_rate');
+    expect(tables.feature_windows).toContain('is_calibration');
     expect(tables.trials).toContain('cue');
     expect(tables.interventions).toContain('micro_break_60s');
     expect(tables.tlx).toContain('mental_demand');
@@ -142,6 +162,7 @@ describe('buildStudyExportTables', () => {
     const tables = buildStudyExportTables([], []);
     expect(tables.session_summary).toBe('');
     expect(tables.cli_windows).toBe('');
+    expect(tables.feature_windows).toBe('');
     expect(tables.trials).toBe('');
     expect(tables.interventions).toBe('');
     expect(tables.tlx).toBe('');

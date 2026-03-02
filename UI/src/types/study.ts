@@ -78,6 +78,15 @@ export interface StudyCliSample {
   qualityFlags: StudyCliQualityFlags;
 }
 
+export interface StudyFeatureWindow {
+  timestampMs: number;
+  sessionTimeS: number;
+  phase: StudyPhaseTag;
+  windowIndex: number;
+  isCalibration: boolean;
+  features: Record<string, number>;
+}
+
 export interface StudyInterventionEvent {
   timestampMs: number;
   sessionTimeS: number;
@@ -151,6 +160,7 @@ export interface StudySessionRecord {
   activeTaskSeconds: number;
   breakSeconds: number;
   cliSamples: StudyCliSample[];
+  featureWindows: StudyFeatureWindow[];
   interventions: StudyInterventionEvent[];
   trials: StudyTrialResult[];
   blockSummaries: StudyBlockSummary[];

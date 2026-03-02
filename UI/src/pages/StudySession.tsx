@@ -20,6 +20,7 @@ import { FrameFeatures, WindowFeatures } from '../types/features';
 import {
   StudyBlockSummary,
   StudyCliSample,
+  StudyFeatureWindow,
   StudyInterventionEvent,
   StudyCondition,
   StudyForm,
@@ -173,6 +174,8 @@ const StudySession: React.FC = () => {
 
   const [trials, setTrials] = useState<StudyTrialResult[]>([]);
   const [cliSamples, setCliSamples] = useState<StudyCliSample[]>([]);
+  const [featureWindows, setFeatureWindows] = useState<StudyFeatureWindow[]>([]);
+  const windowIndexRef = useRef(0);
   const [interventions, setInterventions] = useState<StudyInterventionEvent[]>([]);
   const [blockSummaries, setBlockSummaries] = useState<StudyBlockSummary[]>([]);
 
@@ -246,6 +249,7 @@ const StudySession: React.FC = () => {
         activeTaskSeconds,
         breakSeconds,
         cliSamples,
+        featureWindows,
         interventions,
         trials,
         blockSummaries,
@@ -261,6 +265,7 @@ const StudySession: React.FC = () => {
       blockSummaries,
       breakSeconds,
       cliSamples,
+      featureWindows,
       interventions,
       missingSetup,
       participantId,
@@ -349,6 +354,7 @@ const StudySession: React.FC = () => {
       activeTaskSeconds,
       breakSeconds,
       cliSamples,
+      featureWindows,
       interventions,
       trials,
       blockSummaries,
@@ -364,6 +370,7 @@ const StudySession: React.FC = () => {
     blockSummaries,
     breakSeconds,
     cliSamples,
+    featureWindows,
     interventions,
     navigate,
     participantId,
@@ -393,7 +400,25 @@ const StudySession: React.FC = () => {
     async (windowFeatures: WindowFeatures) => {
       if (backendStatus !== 'connected') return;
 
+      const phaseTag = phaseToTag(phase);
+      const now = Date.now();
+      const wi = windowIndexRef.current++;
+
       if (!baselineRef.current) {
+        // Log raw calibration window features (base features only, no engineering yet)
+        const calibrationFeatures: Record<string, number> = {};
+        for (const [key, value] of Object.entries(windowFeatures)) {
+          if (typeof value === 'number') calibrationFeatures[key] = value;
+        }
+        setFeatureWindows((prev) => [...prev, {
+          timestampMs: now,
+          sessionTimeS: totalSessionSeconds,
+          phase: phaseTag,
+          windowIndex: wi,
+          isCalibration: true,
+          features: calibrationFeatures,
+        }]);
+
         baselineSamplesRef.current.push(windowFeatures);
         if (baselineSamplesRef.current.length >= 4) {
           baselineRef.current = computeBaseline(baselineSamplesRef.current.slice(-4));
@@ -406,6 +431,16 @@ const StudySession: React.FC = () => {
       const engineered = engineerFeatures(windowFeatures, baselineRef.current, prevCenteredRef.current);
       prevCenteredRef.current = engineered.nextPrevCentered;
 
+      // Log the full 42-feature engineered vector for every window
+      setFeatureWindows((prev) => [...prev, {
+        timestampMs: now,
+        sessionTimeS: totalSessionSeconds,
+        phase: phaseTag,
+        windowIndex: wi,
+        isCalibration: false,
+        features: engineered.featureMap,
+      }]);
+
       try {
         const result = await predictCognitiveLoad(engineered.featureMap);
         if (!result.success) return;
@@ -415,14 +450,13 @@ const StudySession: React.FC = () => {
 
         setCurrentLoad(smoothed);
 
-        const phaseTag = phaseToTag(phase);
         const qualityFlags = {
           lowValidFrameRatio: windowFeatures.valid_frame_ratio < STUDY_QUALITY_CONFIG.validFrameRatioMin,
           unstableIllumination: windowFeatures.std_brightness > STUDY_QUALITY_CONFIG.illuminationStdMax,
         };
 
         const cliSample: StudyCliSample = {
-          timestampMs: Date.now(),
+          timestampMs: now,
           sessionTimeS: totalSessionSeconds,
           phase: phaseTag,
           rawCli: result.cli,

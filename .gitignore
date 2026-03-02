@@ -102,6 +102,8 @@ ui/.env.production.local
 # Deployment environment files
 .env.production
 .env.local
+CLAUDE.md
+claude.md
 
 # Ignore Data folder
 data/

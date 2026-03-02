@@ -3,6 +3,7 @@ import { StudyDelayedTestRecord, StudySessionRecord } from '../types/study';
 export interface StudyExportTables {
   session_summary: string;
   cli_windows: string;
+  feature_windows: string;
   trials: string;
   interventions: string;
   tlx: string;
@@ -87,6 +88,22 @@ export function buildStudyExportTables(
       illumination_std: sample.illuminationStd,
       low_vfr_flag: sample.qualityFlags.lowValidFrameRatio,
       unstable_illumination_flag: sample.qualityFlags.unstableIllumination,
+    }))
+  );
+
+  const featureRows = sessions.flatMap((s) =>
+    (s.featureWindows ?? []).map((fw) => ({
+      record_id: s.recordId,
+      participant_id: s.participantId,
+      session_number: s.sessionNumber,
+      condition: s.condition,
+      form: s.form,
+      timestamp_ms: fw.timestampMs,
+      session_time_s: fw.sessionTimeS,
+      phase: fw.phase,
+      window_index: fw.windowIndex,
+      is_calibration: fw.isCalibration,
+      ...fw.features,
     }))
   );
 
@@ -177,6 +194,7 @@ export function buildStudyExportTables(
   return {
     session_summary: toCsv(sessionSummaryRows),
     cli_windows: toCsv(cliRows),
+    feature_windows: toCsv(featureRows),
     trials: toCsv(trialRows),
     interventions: toCsv(interventionRows),
     tlx: toCsv(tlxRows),
