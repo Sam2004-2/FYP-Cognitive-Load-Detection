@@ -182,6 +182,15 @@ const StudySummary: React.FC = () => {
           </div>
         </div>
 
+        {record.runtimeDiagnostics?.phaseIntegrityOk === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-900 text-sm">
+            <div className="font-medium">Session integrity warning</div>
+            <div className="mt-1">
+              Phase logging appears incomplete for this run. Please repeat this session and keep this record flagged for audit.
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <NasaTLXForm
             title="NASA-TLX (Session-level)"

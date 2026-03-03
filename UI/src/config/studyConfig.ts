@@ -13,6 +13,11 @@ export const STUDY_CONFIG: StudySessionPlan = {
   adaptationCooldownSeconds: 120,
   decisionWindowSeconds: 5,
   smoothingWindows: 3,
+  adaptiveMode: 'relative',
+  absoluteThreshold: 0.58,
+  relativeZThreshold: 1.0,
+  warmupWindows: 4,
+  minStdEpsilon: 0.02,
   overloadThreshold: 0.7,
 };
 

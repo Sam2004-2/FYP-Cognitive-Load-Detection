@@ -3,6 +3,7 @@ import { NASATLXScores } from '../types';
 export type StudyCondition = 'adaptive' | 'baseline';
 export type StudySessionNumber = 1 | 2;
 export type StudyForm = 'A' | 'B';
+export type StudyAdaptiveMode = 'absolute' | 'relative';
 
 export type StudyPhaseTag =
   | 'baseline_calibration'
@@ -59,7 +60,12 @@ export interface StudySessionPlan {
   adaptationCooldownSeconds: number;
   decisionWindowSeconds: number;
   smoothingWindows: number;
-  overloadThreshold: number;
+  adaptiveMode: StudyAdaptiveMode;
+  absoluteThreshold: number;
+  relativeZThreshold: number;
+  warmupWindows: number;
+  minStdEpsilon: number;
+  overloadThreshold?: number;
 }
 
 export interface StudyCliQualityFlags {
@@ -73,6 +79,10 @@ export interface StudyCliSample {
   phase: StudyPhaseTag;
   rawCli: number;
   smoothedCli: number;
+  /** In absolute mode: smoothed CLI (0-1). In relative mode: z-score (unbounded). Interpret via decisionMode. */
+  decisionCli?: number;
+  decisionThreshold?: number;
+  decisionMode?: StudyAdaptiveMode;
   validFrameRatio: number;
   illuminationStd: number;
   qualityFlags: StudyCliQualityFlags;
@@ -144,6 +154,17 @@ export interface StudyBlockSummary {
   adaptationApplied: boolean;
 }
 
+export interface StudyRuntimeDiagnostics {
+  phaseIntegrityOk: boolean;
+  phaseCounts: Record<string, number>;
+  uniquePhases?: StudyPhaseTag[];
+  learningPhaseSampleCount?: number;
+  adaptiveTriggerCount: number;
+  adaptiveSuppressionCount: number;
+  lowConfidencePauseCount: number;
+  notes?: string[];
+}
+
 export interface StudySessionRecord {
   recordVersion: number;
   recordId: string;
@@ -164,6 +185,7 @@ export interface StudySessionRecord {
   interventions: StudyInterventionEvent[];
   trials: StudyTrialResult[];
   blockSummaries: StudyBlockSummary[];
+  runtimeDiagnostics?: StudyRuntimeDiagnostics;
   nasaTlx?: NASATLXScores;
   pendingDelayedTest: boolean;
   delayedDueAtIso: string;
