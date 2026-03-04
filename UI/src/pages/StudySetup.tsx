@@ -8,7 +8,6 @@ import { PendingDelayedTask, StudySessionNumber, StudySetupState } from '../type
 
 interface StudySetupRouteState {
   participantId?: string;
-  suggestedSessionNumber?: StudySessionNumber;
 }
 
 const StudySetup: React.FC = () => {
@@ -17,7 +16,6 @@ const StudySetup: React.FC = () => {
   const routeState = location.state as StudySetupRouteState | undefined;
 
   const [participantId, setParticipantId] = useState(routeState?.participantId ?? '');
-  const [sessionNumber, setSessionNumber] = useState<StudySessionNumber>(1);
   const [allowEarlySession2, setAllowEarlySession2] = useState(false);
 
   const [serverPending, setServerPending] = useState<PendingDelayedTask[]>([]);
@@ -29,16 +27,6 @@ const StudySetup: React.FC = () => {
       setParticipantId(routeState.participantId);
     }
   }, [routeState?.participantId]);
-
-  useEffect(() => {
-    const suggestedSessionNumber = routeState?.suggestedSessionNumber;
-    const suggestedParticipantId = routeState?.participantId?.trim().toLowerCase();
-    const currentParticipantId = participantId.trim().toLowerCase();
-
-    if (!suggestedSessionNumber || !suggestedParticipantId) return;
-
-    setSessionNumber(currentParticipantId === suggestedParticipantId ? suggestedSessionNumber : 1);
-  }, [participantId, routeState?.participantId, routeState?.suggestedSessionNumber]);
 
   useEffect(() => {
     trackPageView({
@@ -87,14 +75,26 @@ const StudySetup: React.FC = () => {
     return getMostRecentSession(participantId.trim(), 1);
   }, [participantId]);
 
-  const assignment = useMemo(() => {
+  const previousSession2 = useMemo(() => {
     if (!participantId.trim()) return null;
-    return computeStudyAssignment(participantId.trim(), sessionNumber);
-  }, [participantId, sessionNumber]);
+    return getMostRecentSession(participantId.trim(), 2);
+  }, [participantId]);
+
+  const nextSessionNumber = useMemo<StudySessionNumber | null>(() => {
+    if (!participantId.trim()) return null;
+    if (!previousSession1) return 1;
+    if (!previousSession2) return 2;
+    return null;
+  }, [participantId, previousSession1, previousSession2]);
+
+  const assignment = useMemo(() => {
+    if (!participantId.trim() || !nextSessionNumber) return null;
+    return computeStudyAssignment(participantId.trim(), nextSessionNumber);
+  }, [participantId, nextSessionNumber]);
 
   const timingValidation = useMemo(() => {
-    return validateSession2Timing(sessionNumber, previousSession1?.completedAtIso);
-  }, [sessionNumber, previousSession1?.completedAtIso]);
+    return validateSession2Timing(nextSessionNumber ?? 1, previousSession1?.completedAtIso);
+  }, [nextSessionNumber, previousSession1?.completedAtIso]);
 
   const localPendingDelayed = useMemo(() => {
     if (!participantId.trim()) return [];
@@ -102,16 +102,17 @@ const StudySetup: React.FC = () => {
   }, [participantId]);
 
   const canStart = Boolean(
-    assignment && (!timingValidation.tooEarly || allowEarlySession2 || sessionNumber === 1)
+    assignment && (!timingValidation.tooEarly || allowEarlySession2 || nextSessionNumber === 1)
   );
+  const sessionsComplete = Boolean(participantId.trim() && previousSession1 && previousSession2);
 
   const handleStart = () => {
-    if (!assignment) return;
+    if (!assignment || !nextSessionNumber) return;
 
     trackPageView({
       page: ACTIVITY_PAGES.STUDY_SETUP_START,
       participantId: participantId.trim(),
-      sessionNumber,
+      sessionNumber: nextSessionNumber,
       condition: assignment.condition,
     });
 
@@ -120,7 +121,7 @@ const StudySetup: React.FC = () => {
       assignment,
       plan: getStudyPlan(),
       session2StartedEarlyOverride:
-        sessionNumber === 2 ? allowEarlySession2 && timingValidation.tooEarly : false,
+        nextSessionNumber === 2 ? allowEarlySession2 && timingValidation.tooEarly : false,
     };
 
     navigate('/study/session', { state });
@@ -153,26 +154,21 @@ const StudySetup: React.FC = () => {
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Session Number</label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setSessionNumber(1)}
-                className={`px-4 py-2 rounded-lg border ${sessionNumber === 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-              >
-                Session 1
-              </button>
-              <button
-                onClick={() => setSessionNumber(2)}
-                className={`px-4 py-2 rounded-lg border ${sessionNumber === 2 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}
-              >
-                Session 2
-              </button>
+          {participantId.trim() && (
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800">
+              {sessionsComplete ? (
+                <div className="font-medium">Session 1 and Session 2 are complete for this participant.</div>
+              ) : nextSessionNumber ? (
+                <div className="font-medium">Next required step: Session {nextSessionNumber}</div>
+              ) : (
+                <div className="font-medium">Enter a participant ID to continue.</div>
+              )}
             </div>
-          </div>
+          )}
 
           {assignment && (
             <div className="rounded-lg bg-blue-50 border border-blue-100 p-4 text-sm text-blue-900 space-y-1">
+              <div><span className="font-semibold">Session:</span> {assignment.sessionNumber}</div>
               <div><span className="font-semibold">Condition:</span> {assignment.condition}</div>
               <div><span className="font-semibold">Stimulus form:</span> {assignment.form}</div>
               <div><span className="font-semibold">Condition order:</span> {assignment.conditionOrder[0]} → {assignment.conditionOrder[1]}</div>
@@ -181,7 +177,7 @@ const StudySetup: React.FC = () => {
             </div>
           )}
 
-          {sessionNumber === 2 && timingValidation.tooEarly && (
+          {nextSessionNumber === 2 && timingValidation.tooEarly && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-2">
               <div>
                 Session 2 is starting early: only {timingValidation.hoursSinceSession1?.toFixed(1)} hours since Session 1 completion.
@@ -198,9 +194,10 @@ const StudySetup: React.FC = () => {
             </div>
           )}
 
-          {participantId.trim() && (
+          {participantId.trim() && sessionsComplete && (
             <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 text-sm text-purple-900 space-y-2">
-              <div className="font-medium">Pending delayed tests (server)</div>
+              <div className="font-medium">Delayed testing</div>
+              <div>Both sessions are complete. Continue to delayed testing.</div>
               {serverPendingStatus === 'loading' && <div>Checking server for pending delayed tests...</div>}
               {serverPendingStatus === 'error' && <div>{serverPendingError}</div>}
               {serverPendingStatus === 'ready' && serverPending.length === 0 && (
@@ -226,7 +223,7 @@ const StudySetup: React.FC = () => {
                 onClick={() => navigate('/study/delayed', { state: { participantId: participantId.trim() } })}
                 className="mt-1 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white"
               >
-                Open Delayed Test Page
+                Start Delayed Test
               </button>
             </div>
           )}
@@ -238,13 +235,15 @@ const StudySetup: React.FC = () => {
             >
               Cancel
             </button>
-            <button
-              onClick={handleStart}
-              disabled={!canStart}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white"
-            >
-              Start Study Session
-            </button>
+            {!sessionsComplete && (
+              <button
+                onClick={handleStart}
+                disabled={!canStart}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white"
+              >
+                Start Session {nextSessionNumber ?? ''}
+              </button>
+            )}
           </div>
         </div>
       </div>

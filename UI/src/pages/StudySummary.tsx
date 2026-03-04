@@ -172,7 +172,6 @@ const StudySummary: React.FC = () => {
     navigate('/study/setup', {
       state: {
         participantId: record.participantId,
-        suggestedSessionNumber: record.sessionNumber === 1 ? 2 : undefined,
       },
     });
   };
@@ -268,33 +267,25 @@ const StudySummary: React.FC = () => {
           {record.sessionNumber === 1 ? (
             <>
               <p className="text-sm text-gray-600 mb-4">
-                Session 1 is complete. Continue to Session 2 now (or later using the same participant ID).
+                Session 1 is complete. Continue directly to Session 2.
               </p>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={openSetup}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Continue to Session 2 Setup
-                </button>
-                <button
-                  onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
-                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  Open Delayed Test Page
-                </button>
-              </div>
+              <button
+                onClick={openSetup}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Continue to Session 2
+              </button>
             </>
           ) : (
             <>
               <p className="text-sm text-gray-600 mb-4">
-                Keep your participant ID for delayed testing follow-up.
+                Both sessions are complete. Proceed to delayed testing.
               </p>
               <button
                 onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
                 className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
               >
-                Open Delayed Test Page
+                Start Delayed Test
               </button>
             </>
           )}
