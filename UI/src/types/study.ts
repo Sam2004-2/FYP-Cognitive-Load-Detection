@@ -253,3 +253,73 @@ export interface AdminExportQuery {
   toIso?: string;
   format?: 'zip' | 'json';
 }
+
+export interface StudyActivityEventInput {
+  eventType: string;
+  page: string;
+  participantId?: string;
+  visitorId?: string;
+  sessionNumber?: number;
+  condition?: StudyCondition;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AdminReportIndexRecord {
+  participantId: string;
+  kind: 'sessions' | 'delayed';
+  recordId: string;
+  eventTimeIso?: string | null;
+  storedAtIso: string;
+  path: string;
+}
+
+export interface AdminReportIndexResponse {
+  generatedAtIso: string;
+  count: number;
+  records: AdminReportIndexRecord[];
+}
+
+export interface AdminMonitoringDailyUpload {
+  date: string;
+  sessionRecords: number;
+  delayedRecords: number;
+  totalRecords: number;
+}
+
+export interface AdminMonitoringRecentRecord {
+  participantId: string;
+  kind: 'sessions' | 'delayed';
+  recordId: string;
+  condition?: string;
+  sessionNumber?: number;
+  storedAtIso: string;
+}
+
+export interface AdminMonitoringActivityEvent {
+  occurredAtIso: string;
+  eventType: string;
+  page: string;
+  participantId?: string;
+  visitorId?: string;
+  sessionNumber?: number;
+  condition?: string;
+}
+
+export interface AdminMonitoringActivitySummary {
+  activeLast15m: number;
+  activeLast60m: number;
+  visitorsLast24h: number;
+  pageViewsLast24h: number;
+  pageViewCounts: Record<string, number>;
+  recentEvents: AdminMonitoringActivityEvent[];
+}
+
+export interface AdminMonitoringSummary {
+  generatedAtIso: string;
+  totals: Record<string, number>;
+  conditionCounts: Record<string, number>;
+  interventionCounts: Record<string, number>;
+  dailyUploads: AdminMonitoringDailyUpload[];
+  recentRecords: AdminMonitoringRecentRecord[];
+  activity: AdminMonitoringActivitySummary;
+}

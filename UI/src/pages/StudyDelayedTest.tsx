@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import CuedRecallTest from '../components/study/CuedRecallTest';
 import RecognitionTest from '../components/study/RecognitionTest';
 import { STUDY_RECORD_VERSION, STUDY_CONFIG } from '../config/studyConfig';
 import { getPendingDelayedTasks, StudyAPIError, uploadDelayedRecord } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { createDelayedRecordId, listPendingDelayedTests, saveDelayedResult } from '../services/studyStorage';
 import { DelayedPacket } from '../services/studyStimuli';
 import { triggerDownload } from '../services/studyExport';
@@ -92,7 +93,16 @@ const StudyDelayedTest: React.FC = () => {
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
 
-  const refreshServerPending = async (participantId: string) => {
+  useEffect(() => {
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_DELAYED,
+      participantId: routeState?.participantId,
+    });
+  }, [routeState?.participantId]);
+
+  const cancelledRef = useRef(false);
+
+  const refreshServerPending = useCallback(async (participantId: string) => {
     const trimmed = participantId.trim();
     if (!trimmed) {
       setServerPending([]);
@@ -106,9 +116,11 @@ const StudyDelayedTest: React.FC = () => {
 
     try {
       const pending = await getPendingDelayedTasks(trimmed);
+      if (cancelledRef.current) return;
       setServerPending(pending);
       setServerStatus('ready');
     } catch (err) {
+      if (cancelledRef.current) return;
       console.error('Failed to fetch server pending delayed tests:', err);
       setServerPending([]);
       setServerStatus('error');
@@ -118,42 +130,15 @@ const StudyDelayedTest: React.FC = () => {
         setServerError('Failed to load server pending tasks.');
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      if (!participantLookupId.trim()) {
-        setServerPending([]);
-        setServerStatus('idle');
-        setServerError('');
-        return;
-      }
-
-      setServerStatus('loading');
-      setServerError('');
-
-      try {
-        const pending = await getPendingDelayedTasks(participantLookupId.trim());
-        if (cancelled) return;
-        setServerPending(pending);
-        setServerStatus('ready');
-      } catch (err) {
-        if (cancelled) return;
-        console.error('Failed to fetch server pending delayed tests:', err);
-        setServerPending([]);
-        setServerStatus('error');
-        setServerError('Could not load server delayed tasks right now.');
-      }
-    };
-
-    void load();
-
+    cancelledRef.current = false;
+    void refreshServerPending(participantLookupId);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, [participantLookupId]);
+  }, [participantLookupId, refreshServerPending]);
 
   const startFromLocalPending = (record: StudySessionRecord) => {
     const { easyItems, hardItems } = itemsFromSession(record);

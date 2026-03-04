@@ -166,6 +166,15 @@ def test_admin_requires_bearer_token(client: TestClient):
     )
     assert authorized.status_code == 200
 
+    monitoring_unauthorized = client.get("/admin/monitoring/summary")
+    assert monitoring_unauthorized.status_code == 401
+
+    monitoring_authorized = client.get(
+        "/admin/monitoring/summary",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+    assert monitoring_authorized.status_code == 200
+
 
 def test_export_filtering(client: TestClient):
     session_a = make_session_record(
@@ -234,3 +243,53 @@ def test_pending_delayed_resolves_after_delayed_upload(client: TestClient):
     pending_after = client.get(f"/study/pending-delayed/{participant_id}")
     assert pending_after.status_code == 200
     assert pending_after.json()["pending"] == []
+
+
+def test_monitoring_summary_includes_activity_metrics(client: TestClient):
+    participant_id = "P-MONITOR"
+    session_record = make_session_record(
+        participant_id=participant_id,
+        record_id="session-monitor",
+        started_at_iso="2026-02-22T10:00:00Z",
+        due_at_iso="2026-02-23T10:00:00Z",
+        pending_delayed=True,
+    )
+    delayed_record = make_delayed_record(
+        participant_id=participant_id,
+        record_id="delayed-monitor",
+        linked_session_record_id="session-monitor",
+    )
+
+    assert client.post("/study/session-records", json={"record": session_record}).status_code == 200
+    assert client.post("/study/delayed-records", json={"record": delayed_record}).status_code == 200
+
+    activity_response = client.post(
+        "/study/activity",
+        json={
+            "event_type": "page_view",
+            "page": "study_setup",
+            "participant_id": participant_id,
+            "visitor_id": "VISITOR-123",
+            "session_number": 1,
+            "condition": "adaptive",
+            "metadata": {"source": "test"},
+        },
+    )
+    assert activity_response.status_code == 200
+    assert activity_response.json()["success"] is True
+
+    summary_response = client.get(
+        "/admin/monitoring/summary",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+    assert summary_response.status_code == 200
+
+    payload = summary_response.json()
+    assert payload["totals"]["session_records"] == 1
+    assert payload["totals"]["delayed_records"] == 1
+    assert payload["totals"]["unique_participants"] == 1
+    assert payload["totals"]["participants_with_delayed"] == 1
+    assert payload["totals"]["pending_delayed_records"] == 0
+    assert payload["activity"]["page_views_last_24h"] >= 1
+    assert payload["activity"]["active_last_60m"] >= 1
+    assert len(payload["activity"]["recent_events"]) >= 1

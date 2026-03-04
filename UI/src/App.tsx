@@ -5,6 +5,7 @@ import StudySetup from './pages/StudySetup';
 import StudySession from './pages/StudySession';
 import StudySummary from './pages/StudySummary';
 import StudyDelayedTest from './pages/StudyDelayedTest';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/study/session" element={<StudySession />} />
         <Route path="/study/summary" element={<StudySummary />} />
         <Route path="/study/delayed" element={<StudyDelayedTest />} />
+        <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
     </Router>
   );

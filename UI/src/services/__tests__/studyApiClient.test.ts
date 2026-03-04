@@ -1,7 +1,11 @@
 import {
   buildAdminExportUrl,
   createParticipantIdentity,
+  downloadAdminReports,
+  getAdminMonitoringSummary,
+  getAdminReportIndex,
   getPendingDelayedTasks,
+  postStudyActivity,
   uploadDelayedRecord,
   uploadSessionRecord,
 } from '../studyApiClient';
@@ -107,5 +111,115 @@ describe('studyApiClient', () => {
     expect(url).toContain('/admin/reports/export?');
     expect(url).toContain('participant_id=P-1');
     expect(url).toContain('format=zip');
+  });
+
+  it('posts activity events', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+    });
+
+    await postStudyActivity({
+      eventType: 'page_view',
+      page: 'study_setup',
+      participantId: 'P-1',
+      visitorId: 'V-1',
+      sessionNumber: 1,
+      condition: 'adaptive',
+      metadata: { source: 'test' },
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/study/activity'),
+      expect.objectContaining({
+        method: 'POST',
+      })
+    );
+  });
+
+  it('maps admin report index response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        generated_at_iso: '2026-03-04T10:00:00Z',
+        count: 1,
+        records: [
+          {
+            participant_id: 'P-1',
+            kind: 'sessions',
+            record_id: 'r1',
+            event_time_iso: '2026-03-04T09:00:00Z',
+            stored_at_iso: '2026-03-04T09:05:00Z',
+            path: '/opt/cle-data/reports/sessions/P-1/r1.json',
+          },
+        ],
+      }),
+    });
+
+    const result = await getAdminReportIndex('token-1');
+
+    expect(result.count).toBe(1);
+    expect(result.records[0].participantId).toBe('P-1');
+    expect(result.records[0].kind).toBe('sessions');
+  });
+
+  it('maps admin monitoring summary response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        generated_at_iso: '2026-03-04T10:00:00Z',
+        totals: { session_records: 2 },
+        condition_counts: { adaptive: 1, baseline: 1 },
+        intervention_counts: { micro_break_60s: 2 },
+        daily_uploads: [
+          {
+            date: '2026-03-04',
+            session_records: 2,
+            delayed_records: 1,
+            total_records: 3,
+          },
+        ],
+        recent_records: [
+          {
+            participant_id: 'P-1',
+            kind: 'sessions',
+            record_id: 'r1',
+            condition: 'adaptive',
+            session_number: 1,
+            stored_at_iso: '2026-03-04T09:05:00Z',
+          },
+        ],
+        activity: {
+          active_last_15m: 1,
+          active_last_60m: 2,
+          visitors_last_24h: 3,
+          page_views_last_24h: 6,
+          page_view_counts: { study_setup: 4 },
+          recent_events: [
+            {
+              occurred_at_iso: '2026-03-04T09:05:00Z',
+              event_type: 'page_view',
+              page: 'study_setup',
+            },
+          ],
+        },
+      }),
+    });
+
+    const summary = await getAdminMonitoringSummary('token-1');
+
+    expect(summary.totals.session_records).toBe(2);
+    expect(summary.dailyUploads[0].totalRecords).toBe(3);
+    expect(summary.activity.activeLast15m).toBe(1);
+    expect(summary.activity.recentEvents[0].eventType).toBe('page_view');
+  });
+
+  it('downloads admin exports as blob', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      blob: async () => new Blob(['hello'], { type: 'application/zip' }),
+    });
+
+    const blob = await downloadAdminReports('token-1', { format: 'zip' });
+    expect(blob.size).toBeGreaterThan(0);
   });
 });

@@ -14,6 +14,7 @@ import { StudyAdaptiveController } from '../services/studyAdaptiveController';
 import { engineerFeatures, computeBaseline } from '../services/featureEngineering';
 import { computeWindowFeatures } from '../services/featureExtraction';
 import { computeSessionRuntimeDiagnostics } from '../services/studyRuntimeDiagnostics';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { createSessionRecordId, saveSessionDraft } from '../services/studyStorage';
 import { getStimulusItemsForBlock } from '../services/studyStimuli';
 import { WindowBuffer, validateWindowQuality } from '../services/windowBuffer';
@@ -307,6 +308,16 @@ const StudySession: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (missingSetup) return;
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SESSION,
+      participantId,
+      sessionNumber: assignment.sessionNumber,
+      condition: assignment.condition,
+    });
+  }, [assignment.condition, assignment.sessionNumber, missingSetup, participantId]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setTotalSessionSeconds((prev) => prev + 1);
       setPhaseSeconds((prev) => prev + 1);
@@ -387,6 +398,15 @@ const StudySession: React.FC = () => {
     };
 
     persistDraft(completedRecord);
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SESSION_COMPLETE,
+      participantId,
+      sessionNumber: assignment.sessionNumber,
+      condition: assignment.condition,
+      metadata: {
+        recordId: recordIdRef.current,
+      },
+    });
     navigate('/study/summary', { state: { record: completedRecord } });
   }, [
     activeTaskSeconds,

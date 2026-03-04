@@ -5,6 +5,7 @@ Provides REST API endpoints for real-time cognitive load estimation.
 """
 
 import argparse
+from collections import Counter, defaultdict
 import csv
 import io
 import json
@@ -13,7 +14,7 @@ import re
 import secrets
 import sys
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -61,6 +62,13 @@ def normalize_storage_segment(raw: str, label: str) -> str:
 def get_reports_root() -> Path:
     """Return persistent reports root, creating it on demand."""
     root = Path(os.environ.get("CLE_REPORTS_DIR", "data/reports"))
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def get_activity_root() -> Path:
+    """Return persistent activity-events root, creating it on demand."""
+    root = get_reports_root() / "activity"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -232,6 +240,81 @@ def parse_time_filter(label: str, value: Optional[str]) -> Optional[datetime]:
         raise HTTPException(status_code=400, detail=f"Invalid {label}: {err}") from err
 
 
+def append_activity_event(payload: Dict[str, Any]) -> None:
+    """Append an activity event to a newline-delimited JSON log file."""
+    filename = f"{datetime.now(timezone.utc):%Y-%m-%d}.ndjson"
+    path = get_activity_root() / filename
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload) + "\n")
+
+
+def _file_date_str(path: Path) -> str:
+    """Extract YYYY-MM-DD from an NDJSON filename stem."""
+    return path.stem
+
+
+def iter_activity_events(
+    from_dt: Optional[datetime] = None,
+    to_dt: Optional[datetime] = None,
+    max_events: int = 20000,
+) -> List[tuple]:
+    """Load activity events from NDJSON files with optional time filtering.
+
+    Returns a list of ``(event_dict, occurred_at_datetime)`` tuples.
+    """
+    root = get_activity_root()
+    if not root.exists():
+        return []
+
+    from_date_str = from_dt.strftime("%Y-%m-%d") if from_dt else None
+    to_date_str = to_dt.strftime("%Y-%m-%d") if to_dt else None
+
+    loaded: List[tuple] = []
+    for event_file in sorted(root.glob("*.ndjson")):
+        file_date = _file_date_str(event_file)
+        if from_date_str and file_date < from_date_str:
+            continue
+        if to_date_str and file_date > to_date_str:
+            continue
+
+        try:
+            with event_file.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    raw = line.strip()
+                    if not raw:
+                        continue
+
+                    try:
+                        payload = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if not isinstance(payload, dict):
+                        continue
+
+                    occurred_at_iso = payload.get("occurred_at_iso")
+                    if not isinstance(occurred_at_iso, str) or not occurred_at_iso:
+                        continue
+
+                    try:
+                        occurred_at = parse_iso8601(occurred_at_iso)
+                    except ValueError:
+                        continue
+
+                    if from_dt and occurred_at < from_dt:
+                        continue
+                    if to_dt and occurred_at > to_dt:
+                        continue
+
+                    loaded.append((payload, occurred_at))
+        except OSError as err:
+            logger.warning(f"Skipping unreadable activity file {event_file}: {err}")
+
+    if len(loaded) > max_events:
+        loaded = loaded[-max_events:]
+    return loaded
+
+
 class PredictionRequest(BaseModel):
     """Request for cognitive load prediction."""
 
@@ -319,6 +402,25 @@ class StudyUploadResponse(BaseModel):
     stored_at_iso: str
 
 
+class StudyActivityRequest(BaseModel):
+    """Client-side activity event payload."""
+
+    event_type: str = Field(..., min_length=1, max_length=64)
+    page: str = Field(..., min_length=1, max_length=128)
+    participant_id: Optional[str] = Field(None, max_length=128)
+    visitor_id: Optional[str] = Field(None, max_length=128)
+    session_number: Optional[int] = None
+    condition: Optional[str] = Field(None, max_length=32)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class StudyActivityResponse(BaseModel):
+    """Activity ingest response."""
+
+    success: bool
+    stored_at_iso: str
+
+
 class PendingDelayedTask(BaseModel):
     """Pending delayed test descriptor."""
 
@@ -356,6 +458,61 @@ class ReportIndexResponse(BaseModel):
     generated_at_iso: str
     count: int
     records: List[ReportMetadata]
+
+
+class AdminMonitoringRecentRecord(BaseModel):
+    """Recent report-level activity entry for admin dashboard."""
+
+    participant_id: str
+    kind: str
+    record_id: str
+    condition: Optional[str] = None
+    session_number: Optional[int] = None
+    stored_at_iso: str
+
+
+class AdminMonitoringDailyUpload(BaseModel):
+    """Daily uploaded-record counts."""
+
+    date: str
+    session_records: int
+    delayed_records: int
+    total_records: int
+
+
+class AdminMonitoringActivityEvent(BaseModel):
+    """Recent client activity event."""
+
+    occurred_at_iso: str
+    event_type: str
+    page: str
+    participant_id: Optional[str] = None
+    visitor_id: Optional[str] = None
+    session_number: Optional[int] = None
+    condition: Optional[str] = None
+
+
+class AdminMonitoringActivitySummary(BaseModel):
+    """Aggregate activity metrics for admin dashboard."""
+
+    active_last_15m: int
+    active_last_60m: int
+    visitors_last_24h: int
+    page_views_last_24h: int
+    page_view_counts: Dict[str, int]
+    recent_events: List[AdminMonitoringActivityEvent]
+
+
+class AdminMonitoringSummaryResponse(BaseModel):
+    """High-level monitoring summary for reports and site activity."""
+
+    generated_at_iso: str
+    totals: Dict[str, int]
+    condition_counts: Dict[str, int]
+    intervention_counts: Dict[str, int]
+    daily_uploads: List[AdminMonitoringDailyUpload]
+    recent_records: List[AdminMonitoringRecentRecord]
+    activity: AdminMonitoringActivitySummary
 
 
 # Create FastAPI app
@@ -423,13 +580,16 @@ async def root():
         "endpoints": {
             "POST /predict": "Make cognitive load prediction",
             "GET /health": "Health check",
-            "GET /model-info": "Model information",
+            "GET /model-info": "Model information (legacy)",
+            "POST /save-training-data": "Save training samples (legacy, admin token required)",
             "POST /study/participants": "Generate participant identifier",
             "POST /study/session-records": "Upload completed session JSON",
             "POST /study/delayed-records": "Upload completed delayed test JSON",
+            "POST /study/activity": "Log non-sensitive site usage event",
             "GET /study/pending-delayed/{participant_id}": "Fetch pending delayed tasks",
             "GET /admin/reports/index": "List stored reports (admin token required)",
             "GET /admin/reports/export": "Export stored reports (admin token required)",
+            "GET /admin/monitoring/summary": "Report + usage dashboard metrics (admin token required)",
         },
     }
 
@@ -499,7 +659,11 @@ async def predict_cognitive_load(request: PredictionRequest):
 
 
 @app.post("/save-training-data", response_model=TrainingDataResponse)
-async def save_training_data(request: TrainingDataRequest):
+async def save_training_data(
+    request: TrainingDataRequest,
+    authorization: Optional[str] = Header(None),
+):
+    require_admin_token(authorization)
     """
     Save collected training data to CSV file.
 
@@ -662,6 +826,49 @@ async def upload_delayed_record(request: StudyDelayedUploadRequest):
     return StudyUploadResponse(success=True, record_id=record_id, stored_at_iso=stored_at_iso)
 
 
+@app.post("/study/activity", response_model=StudyActivityResponse)
+async def track_study_activity(
+    request: StudyActivityRequest,
+    user_agent: Optional[str] = Header(None),
+):
+    """Store lightweight client activity events for monitoring dashboard."""
+    stored_at_iso = utc_now_iso()
+    participant_id = (
+        normalize_storage_segment(request.participant_id, "participant_id")
+        if request.participant_id
+        else None
+    )
+    visitor_id = (
+        normalize_storage_segment(request.visitor_id, "visitor_id")
+        if request.visitor_id
+        else None
+    )
+    event_type = normalize_storage_segment(request.event_type, "event_type")
+    page = request.page.strip()[:128]
+    condition = request.condition.strip()[:32] if request.condition else None
+    session_number = request.session_number if isinstance(request.session_number, int) else None
+    metadata = request.metadata if isinstance(request.metadata, dict) else {}
+
+    # Keep event payload bounded to avoid large writes.
+    if len(json.dumps(metadata)) > 2048:
+        metadata = {"_truncated": True}
+
+    payload = {
+        "occurred_at_iso": stored_at_iso,
+        "event_type": event_type,
+        "page": page or "unknown",
+        "participant_id": participant_id,
+        "visitor_id": visitor_id,
+        "session_number": session_number,
+        "condition": condition,
+        "metadata": metadata,
+        "user_agent": (user_agent or "")[:256],
+    }
+    append_activity_event(payload)
+
+    return StudyActivityResponse(success=True, stored_at_iso=stored_at_iso)
+
+
 @app.get("/study/pending-delayed/{participant_id}", response_model=PendingDelayedResponse)
 async def get_pending_delayed(participant_id: str):
     """Return pending delayed tasks for a participant using stored server records."""
@@ -741,6 +948,193 @@ async def admin_report_index(
         generated_at_iso=utc_now_iso(),
         count=len(metadata),
         records=metadata,
+    )
+
+
+@app.get("/admin/monitoring/summary", response_model=AdminMonitoringSummaryResponse)
+async def admin_monitoring_summary(authorization: Optional[str] = Header(None)):
+    """Aggregate report and site-activity metrics for admin monitoring dashboard."""
+    require_admin_token(authorization)
+
+    now = datetime.now(timezone.utc)
+    recent_24h = now - timedelta(hours=24)
+    recent_60m = now - timedelta(minutes=60)
+    recent_15m = now - timedelta(minutes=15)
+
+    session_records = iter_record_files("sessions")
+    delayed_records = iter_record_files("delayed")
+    all_records = session_records + delayed_records
+
+    participants = {entry["participant_id"] for entry in all_records}
+    participants_with_session2 = set()
+    participants_with_delayed = {entry["participant_id"] for entry in delayed_records}
+    condition_counts: Counter = Counter()
+    intervention_counts: Counter = Counter()
+    phase_integrity_issue_records = 0
+
+    completed_delayed_links = {
+        str(entry["payload"].get("linkedSessionRecordId", ""))
+        for entry in delayed_records
+        if isinstance(entry.get("payload"), dict)
+    }
+
+    pending_delayed_records = 0
+    for entry in session_records:
+        payload = entry["payload"] if isinstance(entry.get("payload"), dict) else {}
+        session_number = payload.get("sessionNumber")
+        if session_number == 2:
+            participants_with_session2.add(entry["participant_id"])
+
+        condition = str(payload.get("condition", "")).strip().lower() or "unknown"
+        condition_counts[condition] += 1
+
+        diagnostics = payload.get("runtimeDiagnostics")
+        if isinstance(diagnostics, dict) and diagnostics.get("phaseIntegrityOk") is False:
+            phase_integrity_issue_records += 1
+
+        interventions = payload.get("interventions")
+        if isinstance(interventions, list):
+            for intervention in interventions:
+                if not isinstance(intervention, dict):
+                    continue
+                intervention_type = str(intervention.get("type", "")).strip() or "unknown"
+                intervention_counts[intervention_type] += 1
+
+        record_id = str(payload.get("recordId", "")).strip()
+        pending_flag = bool(payload.get("pendingDelayedTest", True))
+        if pending_flag and record_id and record_id not in completed_delayed_links:
+            pending_delayed_records += 1
+
+    uploads_last_24h = 0
+    daily_counts: Dict[str, Dict[str, int]] = defaultdict(
+        lambda: {"session_records": 0, "delayed_records": 0}
+    )
+    for entry in all_records:
+        try:
+            stored_at = parse_iso8601(entry["stored_at_iso"])
+        except ValueError:
+            continue
+
+        if stored_at >= recent_24h:
+            uploads_last_24h += 1
+
+        day_key = stored_at.date().isoformat()
+        if entry["kind"] == "sessions":
+            daily_counts[day_key]["session_records"] += 1
+        else:
+            daily_counts[day_key]["delayed_records"] += 1
+
+    daily_uploads: List[AdminMonitoringDailyUpload] = []
+    for days_ago in range(13, -1, -1):
+        day = (now - timedelta(days=days_ago)).date().isoformat()
+        session_count = daily_counts[day]["session_records"]
+        delayed_count = daily_counts[day]["delayed_records"]
+        daily_uploads.append(
+            AdminMonitoringDailyUpload(
+                date=day,
+                session_records=session_count,
+                delayed_records=delayed_count,
+                total_records=session_count + delayed_count,
+            )
+        )
+
+    sorted_records = sorted(all_records, key=lambda item: item["stored_at_iso"], reverse=True)
+    recent_records = [
+        AdminMonitoringRecentRecord(
+            participant_id=entry["participant_id"],
+            kind=entry["kind"],
+            record_id=entry["record_id"],
+            condition=(
+                str(entry["payload"].get("condition")).strip()
+                if isinstance(entry.get("payload"), dict) and entry["payload"].get("condition") is not None
+                else None
+            ),
+            session_number=(
+                int(entry["payload"].get("sessionNumber"))
+                if isinstance(entry.get("payload"), dict) and isinstance(entry["payload"].get("sessionNumber"), int)
+                else None
+            ),
+            stored_at_iso=entry["stored_at_iso"],
+        )
+        for entry in sorted_records[:25]
+    ]
+
+    activity_tuples = iter_activity_events(from_dt=recent_24h, max_events=20000)
+    activity_tuples.sort(key=lambda pair: pair[1], reverse=True)
+
+    active_keys_15m = set()
+    active_keys_60m = set()
+    visitor_keys_24h = set()
+    page_views_24h = 0
+    page_view_counts: Counter = Counter()
+
+    for event, occurred_at in activity_tuples:
+        identity = event.get("participant_id") or event.get("visitor_id")
+        if identity:
+            visitor_keys_24h.add(str(identity))
+            if occurred_at >= recent_60m:
+                active_keys_60m.add(str(identity))
+            if occurred_at >= recent_15m:
+                active_keys_15m.add(str(identity))
+
+        page = str(event.get("page", "unknown"))
+        page_view_counts[page] += 1
+        page_views_24h += 1
+
+    recent_events = [
+        AdminMonitoringActivityEvent(
+            occurred_at_iso=str(event.get("occurred_at_iso", "")),
+            event_type=str(event.get("event_type", "unknown")),
+            page=str(event.get("page", "unknown")),
+            participant_id=(
+                str(event["participant_id"])
+                if event.get("participant_id") is not None
+                else None
+            ),
+            visitor_id=(
+                str(event["visitor_id"])
+                if event.get("visitor_id") is not None
+                else None
+            ),
+            session_number=(
+                int(event["session_number"])
+                if isinstance(event.get("session_number"), int)
+                else None
+            ),
+            condition=(str(event.get("condition")) if event.get("condition") else None),
+        )
+        for event, _ in activity_tuples[:50]
+    ]
+
+    totals = {
+        "total_records": len(all_records),
+        "session_records": len(session_records),
+        "delayed_records": len(delayed_records),
+        "unique_participants": len(participants),
+        "participants_with_session2": len(participants_with_session2),
+        "participants_with_delayed": len(participants_with_delayed),
+        "pending_delayed_records": pending_delayed_records,
+        "uploads_last_24h": uploads_last_24h,
+        "phase_integrity_issue_records": phase_integrity_issue_records,
+    }
+
+    activity_summary = AdminMonitoringActivitySummary(
+        active_last_15m=len(active_keys_15m),
+        active_last_60m=len(active_keys_60m),
+        visitors_last_24h=len(visitor_keys_24h),
+        page_views_last_24h=page_views_24h,
+        page_view_counts=dict(page_view_counts),
+        recent_events=recent_events,
+    )
+
+    return AdminMonitoringSummaryResponse(
+        generated_at_iso=utc_now_iso(),
+        totals=totals,
+        condition_counts=dict(condition_counts),
+        intervention_counts=dict(intervention_counts),
+        daily_uploads=daily_uploads,
+        recent_records=recent_records,
+        activity=activity_summary,
     )
 
 

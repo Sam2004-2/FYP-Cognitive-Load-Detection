@@ -10,6 +10,12 @@ import SessionSetup from '../SessionSetup';
 
 jest.mock('../../services/studyApiClient', () => ({
   createParticipantIdentity: jest.fn(),
+  postStudyActivity: jest.fn().mockResolvedValue({}),
+}));
+
+jest.mock('../../services/studyActivityTracker', () => ({
+  trackPageView: jest.fn(),
+  ACTIVITY_PAGES: { SESSION_SETUP: 'session_setup' },
 }));
 
 const mockedCreateParticipantIdentity = createParticipantIdentity as jest.MockedFunction<typeof createParticipantIdentity>;

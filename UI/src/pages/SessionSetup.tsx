@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createParticipantIdentity, StudyAPIError } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { StudyParticipantIdentity } from '../types/study';
 
 interface StudySetupRouteState {
@@ -19,6 +20,10 @@ const SessionSetup: React.FC = () => {
 
   const [cameraPermission, setCameraPermission] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    trackPageView({ page: ACTIVITY_PAGES.SESSION_SETUP });
+  }, []);
 
   const requestCameraPermission = async () => {
     try {

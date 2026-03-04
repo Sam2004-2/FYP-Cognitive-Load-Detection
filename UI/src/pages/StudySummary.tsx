@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import NasaTLXForm from '../components/NasaTLXForm';
 import { StudyAPIError, uploadSessionRecord } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { finalizeSession, exportStudyPackage } from '../services/studyStorage';
 import { createDelayedPacket } from '../services/studyStimuli';
 import { triggerDownload } from '../services/studyExport';
@@ -43,6 +44,19 @@ const StudySummary: React.FC = () => {
   const [saved, setSaved] = useState(Boolean(state?.record?.nasaTlx));
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
+
+  useEffect(() => {
+    if (!state?.record) return;
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SUMMARY,
+      participantId: state.record.participantId,
+      sessionNumber: state.record.sessionNumber,
+      condition: state.record.condition,
+      metadata: {
+        recordId: state.record.recordId,
+      },
+    });
+  }, [state?.record]);
 
   const summary = useMemo(() => {
     if (!record) return null;

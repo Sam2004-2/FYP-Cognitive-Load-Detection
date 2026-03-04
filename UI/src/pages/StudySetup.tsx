@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getPendingDelayedTasks } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { getStudyPlan, computeStudyAssignment, validateSession2Timing } from '../services/studyProtocol';
 import { getMostRecentSession, listPendingDelayedTests } from '../services/studyStorage';
 import { PendingDelayedTask, StudySessionNumber, StudySetupState } from '../types/study';
@@ -26,6 +27,13 @@ const StudySetup: React.FC = () => {
     if (routeState?.participantId) {
       setParticipantId(routeState.participantId);
     }
+  }, [routeState?.participantId]);
+
+  useEffect(() => {
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SETUP,
+      participantId: routeState?.participantId,
+    });
   }, [routeState?.participantId]);
 
   useEffect(() => {
@@ -88,6 +96,13 @@ const StudySetup: React.FC = () => {
 
   const handleStart = () => {
     if (!assignment) return;
+
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SETUP_START,
+      participantId: participantId.trim(),
+      sessionNumber,
+      condition: assignment.condition,
+    });
 
     const state: StudySetupState = {
       participantId: participantId.trim(),
