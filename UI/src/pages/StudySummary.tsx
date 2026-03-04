@@ -44,6 +44,7 @@ const StudySummary: React.FC = () => {
   const [saved, setSaved] = useState(Boolean(state?.record?.nasaTlx));
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [uploadMessage, setUploadMessage] = useState('');
+  const missingCliSamples = record ? record.cliSamples.length === 0 : false;
 
   useEffect(() => {
     if (!state?.record) return;
@@ -98,6 +99,14 @@ const StudySummary: React.FC = () => {
   }
 
   const submitTlx = async (scores: NASATLXScores) => {
+    if (record.cliSamples.length === 0) {
+      setUploadStatus('error');
+      setUploadMessage(
+        'Cannot finalize or upload this session because no CLI samples were captured. Repeat the session with working webcam/backend capture.'
+      );
+      return;
+    }
+
     const updated: StudySessionRecord = {
       ...record,
       nasaTlx: scores,
@@ -215,9 +224,21 @@ const StudySummary: React.FC = () => {
         )}
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
+          {missingCliSamples && (
+            <div className="mb-4 text-sm rounded px-3 py-2 border text-red-700 bg-red-50 border-red-100">
+              No CLI samples were captured for this run. NASA-TLX submission is disabled and this session must be repeated.
+            </div>
+          )}
           <NasaTLXForm
             title="NASA-TLX (Session-level)"
-            submitLabel={saved ? 'NASA-TLX Saved' : 'Save NASA-TLX'}
+            submitLabel={
+              missingCliSamples
+                ? 'Cannot Save: Missing CLI Samples'
+                : saved
+                ? 'NASA-TLX Saved'
+                : 'Save NASA-TLX'
+            }
+            submitDisabled={missingCliSamples || saved}
             onSubmit={(scores) => {
               void submitTlx(scores);
             }}

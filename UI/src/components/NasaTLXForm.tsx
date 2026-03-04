@@ -5,12 +5,14 @@ interface NasaTLXFormProps {
   onSubmit: (scores: NASATLXScores) => void;
   title?: string;
   submitLabel?: string;
+  submitDisabled?: boolean;
 }
 
 const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
   onSubmit,
   title = 'NASA Task Load Index (TLX)',
   submitLabel = 'Submit Assessment',
+  submitDisabled = false,
 }) => {
   const [scores, setScores] = useState<NASATLXScores>({
     mentalDemand: 50,
@@ -36,6 +38,7 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitDisabled) return;
     onSubmit(scores);
   };
 
@@ -67,7 +70,8 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
 
       <button
         type="submit"
-        className="w-full bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+        disabled={submitDisabled}
+        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
       >
         {submitLabel}
       </button>
