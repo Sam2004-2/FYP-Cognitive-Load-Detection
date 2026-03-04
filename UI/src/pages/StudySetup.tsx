@@ -17,9 +17,7 @@ const StudySetup: React.FC = () => {
   const routeState = location.state as StudySetupRouteState | undefined;
 
   const [participantId, setParticipantId] = useState(routeState?.participantId ?? '');
-  const [sessionNumber, setSessionNumber] = useState<StudySessionNumber>(
-    routeState?.suggestedSessionNumber === 2 ? 2 : 1
-  );
+  const [sessionNumber, setSessionNumber] = useState<StudySessionNumber>(1);
   const [allowEarlySession2, setAllowEarlySession2] = useState(false);
 
   const [serverPending, setServerPending] = useState<PendingDelayedTask[]>([]);
@@ -33,10 +31,14 @@ const StudySetup: React.FC = () => {
   }, [routeState?.participantId]);
 
   useEffect(() => {
-    if (routeState?.suggestedSessionNumber) {
-      setSessionNumber(routeState.suggestedSessionNumber);
-    }
-  }, [routeState?.suggestedSessionNumber]);
+    const suggestedSessionNumber = routeState?.suggestedSessionNumber;
+    const suggestedParticipantId = routeState?.participantId?.trim().toLowerCase();
+    const currentParticipantId = participantId.trim().toLowerCase();
+
+    if (!suggestedSessionNumber || !suggestedParticipantId) return;
+
+    setSessionNumber(currentParticipantId === suggestedParticipantId ? suggestedSessionNumber : 1);
+  }, [participantId, routeState?.participantId, routeState?.suggestedSessionNumber]);
 
   useEffect(() => {
     trackPageView({
