@@ -159,6 +159,15 @@ const StudySummary: React.FC = () => {
     });
   };
 
+  const openSetup = () => {
+    navigate('/study/setup', {
+      state: {
+        participantId: record.participantId,
+        suggestedSessionNumber: record.sessionNumber === 1 ? 2 : undefined,
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -170,7 +179,7 @@ const StudySummary: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate('/study/setup')}
+            onClick={openSetup}
             className="text-gray-600 hover:text-gray-800"
           >
             Close
@@ -235,15 +244,39 @@ const StudySummary: React.FC = () => {
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-3">Next Step</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Keep your participant ID for delayed testing and your next session.
-          </p>
-          <button
-            onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
-            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            Open Delayed Test Page
-          </button>
+          {record.sessionNumber === 1 ? (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Session 1 is complete. Continue to Session 2 now (or later using the same participant ID).
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={openSetup}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Continue to Session 2 Setup
+                </button>
+                <button
+                  onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
+                  className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  Open Delayed Test Page
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Keep your participant ID for delayed testing follow-up.
+              </p>
+              <button
+                onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Open Delayed Test Page
+              </button>
+            </>
+          )}
         </div>
 
         {uploadStatus === 'error' && (
