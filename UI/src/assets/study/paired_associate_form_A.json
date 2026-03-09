@@ -17,7 +17,7 @@
   {"id":"A-H03","cue":"syrup","target":"glyph","difficulty":"hard","interferenceGroup":"hard-g2"},
   {"id":"A-H04","cue":"symbol","target":"grit","difficulty":"hard","interferenceGroup":"hard-g2"},
   {"id":"A-H05","cue":"merit","target":"chisel","difficulty":"hard","interferenceGroup":"hard-g3"},
-  {"id":"A-H06","cue":"matrix","target":"chisle","difficulty":"hard","interferenceGroup":"hard-g3"},
+  {"id":"A-H06","cue":"matrix","target":"chiseler","difficulty":"hard","interferenceGroup":"hard-g3"},
   {"id":"A-H07","cue":"copper","target":"thimble","difficulty":"hard","interferenceGroup":"hard-g4"},
   {"id":"A-H08","cue":"cobalt","target":"thistle","difficulty":"hard","interferenceGroup":"hard-g4"},
   {"id":"A-H09","cue":"radius","target":"velvet","difficulty":"hard","interferenceGroup":"hard-g5"},
@@ -27,7 +27,7 @@
   {"id":"A-H13","cue":"temple","target":"cipher","difficulty":"hard","interferenceGroup":"hard-g7"},
   {"id":"A-H14","cue":"tempo","target":"cypher","difficulty":"hard","interferenceGroup":"hard-g7"},
   {"id":"A-H15","cue":"vector","target":"murmur","difficulty":"hard","interferenceGroup":"hard-g8"},
-  {"id":"A-H16","cue":"vertex","target":"murmure","difficulty":"hard","interferenceGroup":"hard-g8"},
+  {"id":"A-H16","cue":"vertex","target":"murmured","difficulty":"hard","interferenceGroup":"hard-g8"},
   {"id":"A-H17","cue":"fossil","target":"ledger","difficulty":"hard","interferenceGroup":"hard-g9"},
   {"id":"A-H18","cue":"fractal","target":"legion","difficulty":"hard","interferenceGroup":"hard-g9"}
 ]

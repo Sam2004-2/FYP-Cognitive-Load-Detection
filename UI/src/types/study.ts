@@ -122,6 +122,18 @@ export interface StudyRecognitionChoice {
   isCorrect: boolean;
 }
 
+export type StudyRecallScoringMethod = 'exact_normalized' | 'tolerant_damerau_1';
+export type StudyRecallMatchType = 'exact' | 'near_match' | 'ambiguous_near_match' | 'mismatch';
+
+export interface StudyRecallScoring {
+  version: 2;
+  method: StudyRecallScoringMethod;
+  matchType: StudyRecallMatchType;
+  normalizedResponse: string;
+  normalizedTarget: string;
+  distance: number;
+}
+
 export interface StudyTrialResult {
   trialId: string;
   timestampMs: number;
@@ -136,6 +148,7 @@ export interface StudyTrialResult {
   recognitionChoices?: string[];
   selectedChoice?: string;
   responseText?: string;
+  scoring?: StudyRecallScoring;
   correct: boolean;
   reactionTimeMs: number;
   condition: StudyCondition;

@@ -118,6 +118,7 @@ export function buildStudyExportTables(
 
   const trialRows = sessions.flatMap((s) =>
     s.trials.map((trial) => ({
+      record_version: s.recordVersion,
       record_id: s.recordId,
       participant_id: s.participantId,
       session_number: s.sessionNumber,
@@ -135,6 +136,12 @@ export function buildStudyExportTables(
       selected_choice: trial.selectedChoice ?? '',
       response_text: trial.responseText ?? '',
       correct: trial.correct,
+      scoring_version: trial.scoring?.version ?? '',
+      scoring_method: trial.scoring?.method ?? '',
+      scoring_match_type: trial.scoring?.matchType ?? '',
+      normalized_response: trial.scoring?.normalizedResponse ?? '',
+      normalized_target: trial.scoring?.normalizedTarget ?? '',
+      scoring_distance: trial.scoring?.distance ?? '',
       reaction_time_ms: trial.reactionTimeMs,
       timestamp_ms: trial.timestampMs,
       session_time_s: trial.sessionTimeS,
@@ -178,6 +185,7 @@ export function buildStudyExportTables(
 
   const delayedRows = delayedTests.flatMap((d) =>
     d.trials.map((trial) => ({
+      record_version: d.recordVersion,
       delayed_record_id: d.recordId,
       linked_session_record_id: d.linkedSessionRecordId,
       participant_id: d.participantId,
@@ -193,6 +201,12 @@ export function buildStudyExportTables(
       cue: trial.cue,
       target: trial.target,
       correct: trial.correct,
+      scoring_version: trial.scoring?.version ?? '',
+      scoring_method: trial.scoring?.method ?? '',
+      scoring_match_type: trial.scoring?.matchType ?? '',
+      normalized_response: trial.scoring?.normalizedResponse ?? '',
+      normalized_target: trial.scoring?.normalizedTarget ?? '',
+      scoring_distance: trial.scoring?.distance ?? '',
       reaction_time_ms: trial.reactionTimeMs,
       selected_choice: trial.selectedChoice ?? '',
       response_text: trial.responseText ?? '',

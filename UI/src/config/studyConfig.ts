@@ -32,4 +32,4 @@ export const STUDY_STORAGE_KEYS = {
   delayedPrefix: 'cle_study_delayed_',
 };
 
-export const STUDY_RECORD_VERSION = 1;
+export const STUDY_RECORD_VERSION = 2;
