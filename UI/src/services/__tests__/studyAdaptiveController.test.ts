@@ -61,6 +61,7 @@ describe('StudyAdaptiveController', () => {
   it('does not trigger in relative mode for tightly clustered CLI values', () => {
     Object.assign(STUDY_CONFIG, {
       adaptiveMode: 'relative',
+      absoluteThreshold: 0.7,
       relativeZThreshold: 2.0,
       warmupWindows: 4,
       minStdEpsilon: 0.001,

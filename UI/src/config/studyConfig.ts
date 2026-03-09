@@ -14,7 +14,7 @@ export const STUDY_CONFIG: StudySessionPlan = {
   decisionWindowSeconds: 5,
   smoothingWindows: 3,
   adaptiveMode: 'relative',
-  absoluteThreshold: 0.58,
+  absoluteThreshold: 0.45,
   relativeZThreshold: 1.0,
   warmupWindows: 4,
   minStdEpsilon: 0.02,
