@@ -10,6 +10,7 @@ export type StudyPhaseTag =
   | 'learning_easy'
   | 'test_easy_recognition'
   | 'test_easy_cued_recall'
+  | 'arithmetic_challenge'
   | 'learning_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued_recall'
@@ -31,7 +32,7 @@ export type StudyInterventionOutcome =
   | 'suppressed'
   | 'paused';
 
-export type StudyTrialKind = 'learning' | 'recognition' | 'cued_recall';
+export type StudyTrialKind = 'learning' | 'recognition' | 'cued_recall' | 'arithmetic';
 export type StudyDifficulty = 'easy' | 'hard';
 
 export interface StudyAssignment {
@@ -66,6 +67,8 @@ export interface StudySessionPlan {
   warmupWindows: number;
   minStdEpsilon: number;
   overloadThreshold?: number;
+  /** Number of arithmetic challenge questions shown between easy and hard blocks. */
+  arithmeticQuestionCount: number;
 }
 
 export interface StudyCliQualityFlags {
@@ -153,6 +156,8 @@ export interface StudyTrialResult {
   reactionTimeMs: number;
   condition: StudyCondition;
   form: StudyForm;
+  /** 1 = easy, 2 = medium, 3 = hard. Only set for arithmetic trials. */
+  arithmeticDifficulty?: 1 | 2 | 3;
 }
 
 export interface StudyBlockSummary {

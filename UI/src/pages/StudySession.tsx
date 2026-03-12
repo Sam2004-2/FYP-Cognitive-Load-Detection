@@ -6,6 +6,7 @@ import NasaTLXForm from '../components/NasaTLXForm';
 import CuedRecallTest from '../components/study/CuedRecallTest';
 import PairedAssociateLearningBlock from '../components/study/PairedAssociateLearningBlock';
 import RecognitionTest from '../components/study/RecognitionTest';
+import ArithmeticChallenge from '../components/study/ArithmeticChallenge';
 import StudyInterventionModal from '../components/study/StudyInterventionModal';
 import { FEATURE_CONFIG } from '../config/featureConfig';
 import { STUDY_CONFIG, STUDY_QUALITY_CONFIG, STUDY_RECORD_VERSION } from '../config/studyConfig';
@@ -39,6 +40,7 @@ type SessionPhase =
   | 'learn_easy'
   | 'test_easy_recognition'
   | 'test_easy_cued'
+  | 'arithmetic_challenge'
   | 'learn_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued'
@@ -74,6 +76,8 @@ function phaseToTag(phase: SessionPhase): StudyPhaseTag {
       return 'test_easy_recognition';
     case 'test_easy_cued':
       return 'test_easy_cued_recall';
+    case 'arithmetic_challenge':
+      return 'arithmetic_challenge';
     case 'learn_hard':
       return 'learning_hard';
     case 'test_hard_recognition':
@@ -99,6 +103,7 @@ function isActiveTaskPhase(phase: SessionPhase): boolean {
     phase === 'learn_hard' ||
     phase === 'test_easy_recognition' ||
     phase === 'test_easy_cued' ||
+    phase === 'arithmetic_challenge' ||
     phase === 'test_hard_recognition' ||
     phase === 'test_hard_cued'
   );
@@ -620,6 +625,14 @@ const StudySession: React.FC = () => {
     [transitionTo]
   );
 
+  const completeArithmeticBlock = useCallback(
+    (arithmeticTrials: StudyTrialResult[]) => {
+      setTrials((prev) => [...prev, ...arithmeticTrials]);
+      transitionTo('learn_hard');
+    },
+    [transitionTo]
+  );
+
   const completeCuedBlock = useCallback(
     (cuedTrials: StudyTrialResult[], blockIndex: 1 | 2, difficulty: 'easy' | 'hard', nextPhase: SessionPhase) => {
       const merged = [...trials, ...cuedTrials];
@@ -753,7 +766,20 @@ const StudySession: React.FC = () => {
               condition={assignment.condition}
               form={assignment.form}
               sessionStartMs={sessionStartMsRef.current}
-              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 1, 'easy', 'learn_hard')}
+              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 1, 'easy', 'arithmetic_challenge')}
+            />
+          )}
+
+          {phase === 'arithmetic_challenge' && (
+            <ArithmeticChallenge
+              key="arithmetic_challenge"
+              questionCount={plan.arithmeticQuestionCount}
+              phase="arithmetic_challenge"
+              condition={assignment.condition}
+              form={assignment.form}
+              sessionStartMs={sessionStartMsRef.current}
+              participantSeed={`${participantId}:arith:${assignment.sessionNumber}`}
+              onComplete={completeArithmeticBlock}
             />
           )}
 

@@ -19,6 +19,7 @@ export const STUDY_CONFIG: StudySessionPlan = {
   warmupWindows: 4,
   minStdEpsilon: 0.02,
   overloadThreshold: 0.7,
+  arithmeticQuestionCount: 6,
 };
 
 export const STUDY_QUALITY_CONFIG = {
