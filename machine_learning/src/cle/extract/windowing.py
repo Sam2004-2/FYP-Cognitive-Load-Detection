@@ -4,8 +4,7 @@ Windowing logic for temporal feature aggregation.
 Implements sliding windows for offline and real-time processing.
 """
 
-from collections import deque
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -116,14 +115,13 @@ def interpolate_gaps(frame_features: List[Dict], max_gap: int = 3) -> List[Dict]
                 "ear_left",
                 "ear_right",
                 "ear_mean",
-                "pupil_left",
-                "pupil_right",
-                "pupil_mean",
                 "brightness",
                 "eye_center_x",
                 "eye_center_y",
                 "mouth_mar",
                 "roll",
+                "pitch",
+                "yaw",
             ]
 
             for gap_idx in range(1, gap + 1):
@@ -138,129 +136,3 @@ def interpolate_gaps(frame_features: List[Dict], max_gap: int = 3) -> List[Dict]
                 interpolated[interp_idx]["quality"] = min(f1["quality"], f2["quality"])
 
     return interpolated
-
-
-class WindowBuffer:
-    """
-    Ring buffer for real-time windowing.
-
-    Maintains a fixed-size buffer of recent frame features for real-time processing.
-    """
-
-    def __init__(self, window_length_s: float, fps: float):
-        """
-        Initialize window buffer.
-
-        Args:
-            window_length_s: Window length in seconds
-            fps: Frames per second
-        """
-        self.window_length_s = window_length_s
-        self.fps = fps
-        self.max_frames = int(window_length_s * fps)
-
-        self.buffer: deque = deque(maxlen=self.max_frames)
-        self.frame_count = 0
-
-        logger.debug(
-            f"Initialized WindowBuffer "
-            f"(length={window_length_s}s, fps={fps}, max_frames={self.max_frames})"
-        )
-
-    def add_frame(self, frame_features: Dict) -> None:
-        """
-        Add frame features to buffer.
-
-        Args:
-            frame_features: Per-frame feature dictionary
-        """
-        self.buffer.append(frame_features)
-        self.frame_count += 1
-
-    def is_ready(self) -> bool:
-        """
-        Check if buffer has enough frames for a window.
-
-        Returns:
-            True if buffer is full
-        """
-        return len(self.buffer) >= self.max_frames
-
-    def get_window(self) -> List[Dict]:
-        """
-        Get current window of frame features.
-
-        Returns:
-            List of frame features for current window
-        """
-        return list(self.buffer)
-
-    def get_window_times(self) -> Tuple[float, float]:
-        """
-        Get start and end times for current window.
-
-        Returns:
-            Tuple of (start_time_s, end_time_s)
-        """
-        if not self.buffer:
-            return (0.0, 0.0)
-
-        # Approximate times based on frame count
-        end_time_s = self.frame_count / self.fps
-        start_time_s = max(0.0, end_time_s - self.window_length_s)
-
-        return (start_time_s, end_time_s)
-
-    def reset(self) -> None:
-        """Reset buffer."""
-        self.buffer.clear()
-        self.frame_count = 0
-
-    def __len__(self) -> int:
-        """Get current buffer size."""
-        return len(self.buffer)
-
-
-def extract_window_data(
-    frame_features: List[Dict], window_indices: Tuple[int, int]
-) -> List[Dict]:
-    """
-    Extract frame features for a specific window.
-
-    Args:
-        frame_features: Full list of per-frame features
-        window_indices: (start_idx, end_idx) tuple
-
-    Returns:
-        List of frame features for the window
-    """
-    start_idx, end_idx = window_indices
-    return frame_features[start_idx:end_idx]
-
-
-def compute_window_stats(values: np.ndarray) -> Dict[str, float]:
-    """
-    Compute basic statistics for a window of values.
-
-    Args:
-        values: Array of values
-
-    Returns:
-        Dictionary with mean, std, min, max, median
-    """
-    if len(values) == 0:
-        return {
-            "mean": 0.0,
-            "std": 0.0,
-            "min": 0.0,
-            "max": 0.0,
-            "median": 0.0,
-        }
-
-    return {
-        "mean": float(np.mean(values)),
-        "std": float(np.std(values)),
-        "min": float(np.min(values)),
-        "max": float(np.max(values)),
-        "median": float(np.median(values)),
-    }

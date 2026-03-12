@@ -22,13 +22,10 @@ blink:
 
 # Feature flags
 features_enabled:
-  tepr: false
   blinks: true
   perclos: true
   brightness: true
   geometry: true
-  fix_sac: false
-  gaze_entropy: false
 
 # Task mode: "classification" or "regression"
 task_mode: "regression"

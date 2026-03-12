@@ -128,37 +128,6 @@ def open_video(video_path: str) -> Tuple[cv2.VideoCapture, Dict[str, Any]]:
     return cap, metadata
 
 
-def read_video_frames(video_path: str, max_frames: Optional[int] = None) -> List[np.ndarray]:
-    """
-    Read all frames from video file.
-
-    Args:
-        video_path: Path to video file
-        max_frames: Maximum number of frames to read (None for all)
-
-    Returns:
-        List of frames as numpy arrays (BGR format)
-    """
-    cap, metadata = open_video(video_path)
-    frames = []
-
-    frame_idx = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frames.append(frame)
-        frame_idx += 1
-
-        if max_frames is not None and frame_idx >= max_frames:
-            break
-
-    cap.release()
-    logger.info(f"Read {len(frames)} frames from {Path(video_path).name}")
-    return frames
-
-
 def load_manifest(manifest_path: str) -> pd.DataFrame:
     """
     Load video manifest CSV.

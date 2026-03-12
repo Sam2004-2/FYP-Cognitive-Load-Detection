@@ -13,6 +13,9 @@ export type StudyPhaseTag =
   | 'learning_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued_recall'
+  | 'arithmetic_easy'
+  | 'arithmetic_medium'
+  | 'arithmetic_hard'
   | 'break'
   | 'nasa_tlx'
   | 'complete';
@@ -33,6 +36,8 @@ export type StudyInterventionOutcome =
 
 export type StudyTrialKind = 'learning' | 'recognition' | 'cued_recall';
 export type StudyDifficulty = 'easy' | 'hard';
+export type ArithmeticDifficulty = 'easy' | 'medium' | 'hard';
+export type ArithmeticPhaseTag = 'arithmetic_easy' | 'arithmetic_medium' | 'arithmetic_hard';
 
 export interface StudyAssignment {
   participantId: string;
@@ -66,6 +71,10 @@ export interface StudySessionPlan {
   warmupWindows: number;
   minStdEpsilon: number;
   overloadThreshold?: number;
+  arithmeticPracticeCount: number;
+  arithmeticItemsPerDifficulty: number;
+  arithmeticTimeLimitSeconds: number;
+  arithmeticTransitionSeconds: number;
 }
 
 export interface StudyCliQualityFlags {
@@ -115,6 +124,57 @@ export interface StudyStimulusItem {
   target: string;
   difficulty: StudyDifficulty;
   interferenceGroup: string;
+}
+
+export interface ArithmeticProblem {
+  id: string;
+  difficulty: ArithmeticDifficulty;
+  leftOperand: number;
+  rightOperand: number;
+  expression: string;
+  answer: number;
+}
+
+export interface ArithmeticTrial {
+  trialId: string;
+  problemId: string;
+  timestampMs: number;
+  sessionTimeS: number;
+  phase: ArithmeticPhaseTag;
+  difficulty: ArithmeticDifficulty;
+  leftOperand: number;
+  rightOperand: number;
+  expression: string;
+  expectedAnswer: number;
+  responseText?: string;
+  responseValue?: number;
+  correct: boolean;
+  timedOut: boolean;
+  practice: boolean;
+  reactionTimeMs: number;
+  condition: StudyCondition;
+  form: StudyForm;
+}
+
+export interface ArithmeticDifficultySummary {
+  difficulty: ArithmeticDifficulty;
+  phase: ArithmeticPhaseTag;
+  practiceCount: number;
+  scoredCount: number;
+  correctCount: number;
+  timeoutCount: number;
+  accuracy: number;
+  meanRtMs: number;
+}
+
+export interface ArithmeticChallengeRecord {
+  trials: ArithmeticTrial[];
+  summaries: ArithmeticDifficultySummary[];
+  totalScoredCount: number;
+  totalCorrectCount: number;
+  totalTimeoutCount: number;
+  overallAccuracy: number;
+  overallMeanRtMs: number;
 }
 
 export interface StudyRecognitionChoice {
@@ -197,6 +257,7 @@ export interface StudySessionRecord {
   featureWindows: StudyFeatureWindow[];
   interventions: StudyInterventionEvent[];
   trials: StudyTrialResult[];
+  arithmeticChallenge?: ArithmeticChallengeRecord;
   blockSummaries: StudyBlockSummary[];
   runtimeDiagnostics?: StudyRuntimeDiagnostics;
   nasaTlx?: NASATLXScores;

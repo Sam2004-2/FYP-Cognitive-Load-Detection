@@ -5,6 +5,7 @@ export interface StudyExportTables {
   cli_windows: string;
   feature_windows: string;
   trials: string;
+  arithmetic: string;
   interventions: string;
   tlx: string;
   delayed: string;
@@ -74,6 +75,10 @@ export function buildStudyExportTables(
     adaptive_trigger_count: s.runtimeDiagnostics?.adaptiveTriggerCount ?? '',
     adaptive_suppression_count: s.runtimeDiagnostics?.adaptiveSuppressionCount ?? '',
     low_confidence_pause_count: s.runtimeDiagnostics?.lowConfidencePauseCount ?? '',
+    arithmetic_scored_count: s.arithmeticChallenge?.totalScoredCount ?? '',
+    arithmetic_accuracy: s.arithmeticChallenge?.overallAccuracy ?? '',
+    arithmetic_mean_rt_ms: s.arithmeticChallenge?.overallMeanRtMs ?? '',
+    arithmetic_timeout_count: s.arithmeticChallenge?.totalTimeoutCount ?? '',
     delayed_due_at: s.delayedDueAtIso,
     delayed_pending: s.pendingDelayedTest,
   }));
@@ -167,6 +172,32 @@ export function buildStudyExportTables(
     }))
   );
 
+  const arithmeticRows = sessions.flatMap((s) =>
+    (s.arithmeticChallenge?.trials ?? []).map((trial) => ({
+      record_id: s.recordId,
+      participant_id: s.participantId,
+      session_number: s.sessionNumber,
+      condition: s.condition,
+      form: s.form,
+      trial_id: trial.trialId,
+      problem_id: trial.problemId,
+      phase: trial.phase,
+      difficulty: trial.difficulty,
+      practice: trial.practice,
+      expression: trial.expression,
+      left_operand: trial.leftOperand,
+      right_operand: trial.rightOperand,
+      expected_answer: trial.expectedAnswer,
+      response_text: trial.responseText ?? '',
+      response_value: trial.responseValue ?? '',
+      correct: trial.correct,
+      timed_out: trial.timedOut,
+      reaction_time_ms: trial.reactionTimeMs,
+      timestamp_ms: trial.timestampMs,
+      session_time_s: trial.sessionTimeS,
+    }))
+  );
+
   const tlxRows = sessions
     .filter((s) => s.nasaTlx)
     .map((s) => ({
@@ -219,6 +250,7 @@ export function buildStudyExportTables(
     cli_windows: toCsv(cliRows),
     feature_windows: toCsv(featureRows),
     trials: toCsv(trialRows),
+    arithmetic: toCsv(arithmeticRows),
     interventions: toCsv(interventionRows),
     tlx: toCsv(tlxRows),
     delayed: toCsv(delayedRows),

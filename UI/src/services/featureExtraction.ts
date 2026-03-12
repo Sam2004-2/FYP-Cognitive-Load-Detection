@@ -15,6 +15,24 @@ function euclideanDistance(p1: { x: number; y: number }, p2: { x: number; y: num
 }
 
 /**
+ * Compute mean of an array of numbers.
+ */
+function mean(values: number[]): number {
+  if (values.length === 0) return 0.0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+/**
+ * Compute population standard deviation of an array of numbers.
+ */
+function stdDev(values: number[]): number {
+  if (values.length === 0) return 0.0;
+  const m = mean(values);
+  const variance = values.reduce((sum, v) => sum + (v - m) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+/**
  * Calculate Eye Aspect Ratio (EAR) for blink detection ***
  * 
  * EAR measures eye openness: ratio of vertical to horizontal eye dimensions ***
@@ -423,66 +441,29 @@ export function computeWindowFeatures(
   const blinkFeatures = computeBlinkFeatures(earSeries, fps);
 
   // Compute brightness statistics
-  const meanBrightness =
-    brightnessSeries.reduce((sum, b) => sum + b, 0) / brightnessSeries.length;
-  const brightnessVariance =
-    brightnessSeries.reduce((sum, b) => sum + (b - meanBrightness) ** 2, 0) /
-    brightnessSeries.length;
-  const stdBrightness = Math.sqrt(brightnessVariance);
+  const meanBrightness = mean(brightnessSeries);
+  const stdBrightness = stdDev(brightnessSeries);
 
   // Compute PERCLOS
   const perclos = computePERCLOS(earSeries);
 
   // Compute quality metrics
-  const meanQuality = qualitySeries.reduce((sum, q) => sum + q, 0) / qualitySeries.length;
+  const meanQuality = mean(qualitySeries);
   const validFrameRatio = validFrames.length / frameData.length;
 
-  // Geometry features: mouth openness + head roll variability
-  const mouthSeries = validFrames
-    .map((f) => f.mouth_mar)
-    .filter((v) => Number.isFinite(v));
-  const mouthOpenMean =
-    mouthSeries.length > 0 ? mouthSeries.reduce((sum, v) => sum + v, 0) / mouthSeries.length : 0.0;
-  const mouthVar =
-    mouthSeries.length > 0
-      ? mouthSeries.reduce((sum, v) => sum + (v - mouthOpenMean) ** 2, 0) / mouthSeries.length
-      : 0.0;
-  const mouthOpenStd = Math.sqrt(mouthVar);
+  // Geometry features: mouth openness + head pose variability
+  const mouthSeries = validFrames.map((f) => f.mouth_mar).filter((v) => Number.isFinite(v));
+  const mouthOpenMean = mean(mouthSeries);
+  const mouthOpenStd = stdDev(mouthSeries);
 
-  const rollSeries = validFrames
-    .map((f) => f.roll)
-    .filter((v) => Number.isFinite(v));
-  const rollMean =
-    rollSeries.length > 0 ? rollSeries.reduce((sum, v) => sum + v, 0) / rollSeries.length : 0.0;
-  const rollVar =
-    rollSeries.length > 0
-      ? rollSeries.reduce((sum, v) => sum + (v - rollMean) ** 2, 0) / rollSeries.length
-      : 0.0;
-  const rollStd = Math.sqrt(rollVar);
+  const rollSeries = validFrames.map((f) => f.roll).filter((v) => Number.isFinite(v));
+  const rollStd = stdDev(rollSeries);
 
-  // Pitch variability
-  const pitchSeries = validFrames
-    .map((f) => f.pitch)
-    .filter((v) => Number.isFinite(v));
-  const pitchMean =
-    pitchSeries.length > 0 ? pitchSeries.reduce((sum, v) => sum + v, 0) / pitchSeries.length : 0.0;
-  const pitchVar =
-    pitchSeries.length > 0
-      ? pitchSeries.reduce((sum, v) => sum + (v - pitchMean) ** 2, 0) / pitchSeries.length
-      : 0.0;
-  const pitchStd = Math.sqrt(pitchVar);
+  const pitchSeries = validFrames.map((f) => f.pitch).filter((v) => Number.isFinite(v));
+  const pitchStd = stdDev(pitchSeries);
 
-  // Yaw variability
-  const yawSeries = validFrames
-    .map((f) => f.yaw)
-    .filter((v) => Number.isFinite(v));
-  const yawMean =
-    yawSeries.length > 0 ? yawSeries.reduce((sum, v) => sum + v, 0) / yawSeries.length : 0.0;
-  const yawVar =
-    yawSeries.length > 0
-      ? yawSeries.reduce((sum, v) => sum + (v - yawMean) ** 2, 0) / yawSeries.length
-      : 0.0;
-  const yawStd = Math.sqrt(yawVar);
+  const yawSeries = validFrames.map((f) => f.yaw).filter((v) => Number.isFinite(v));
+  const yawStd = stdDev(yawSeries);
 
   // Motion features: per-frame speed of the eye center, using only valid consecutive frames
   const speeds: number[] = [];
@@ -497,12 +478,8 @@ export function computeWindowFeatures(
 
     speeds.push(Math.sqrt(dx * dx + dy * dy) * fps);
   }
-  const motionMean = speeds.length > 0 ? speeds.reduce((sum, v) => sum + v, 0) / speeds.length : 0.0;
-  const motionVar =
-    speeds.length > 0
-      ? speeds.reduce((sum, v) => sum + (v - motionMean) ** 2, 0) / speeds.length
-      : 0.0;
-  const motionStd = Math.sqrt(motionVar);
+  const motionMean = mean(speeds);
+  const motionStd = stdDev(speeds);
 
   return {
     // Model features (order matches FEATURE_NAMES)

@@ -66,9 +66,6 @@ export const LANDMARK_INDICES = {
    */
   LEFT_EYE: [33, 160, 158, 133, 153, 144],
   RIGHT_EYE: [362, 385, 387, 263, 373, 380],
-  /** Iris landmarks used with refineLandmarks: true option in MediaPipe ***  */
-  LEFT_IRIS: [469, 470, 471, 472],
-  RIGHT_IRIS: [474, 475, 476, 477],
   /** Eye corners - useful for gaze direction estimation ***  */
   LEFT_EYE_INNER: 133,
   LEFT_EYE_OUTER: 33,

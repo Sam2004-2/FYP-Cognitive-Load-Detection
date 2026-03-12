@@ -22,11 +22,6 @@ blink:
   min_blink_ms: 120     # Minimum blink duration in milliseconds
   max_blink_ms: 400     # Maximum blink duration in milliseconds
 
-# TEPR (Task-Evoked Pupillary Response) parameters
-tepr:
-  baseline_s: 10.0      # Baseline window duration in seconds
-  min_baseline_samples: 150  # Minimum samples needed for valid baseline
-
 # Feature flags - enable/disable specific feature groups
 #
 # NOTE: brightness features are still *computed* for quality monitoring but
@@ -34,13 +29,10 @@ tepr:
 # Similarly, mean_quality and valid_frame_ratio are computed for filtering
 # but are not model inputs.
 features_enabled:
-  tepr: false          # Task-Evoked Pupillary Response features (DISABLED - requires calibration)
   blinks: true         # Blink rate and statistics
   perclos: true        # Percentage of eye closure
   brightness: true     # Ambient brightness - computed for monitoring, NOT a model feature
   geometry: true       # Mouth + motion + roll + pitch + yaw geometry features
-  fix_sac: false       # Fixations and saccades (requires calibration)
-  gaze_entropy: false  # Gaze entropy (requires calibration)
 
 # Model configuration
 model:

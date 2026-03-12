@@ -11,6 +11,10 @@ import {
   StudySessionRecord,
   StudySessionUploadResponse,
 } from '../types/study';
+import { APIError } from './apiClient';
+
+/** @deprecated Use APIError from apiClient instead */
+export { APIError as StudyAPIError } from './apiClient';
 
 const API_BASE_URL = FEATURE_CONFIG.api.base_url;
 
@@ -24,17 +28,6 @@ async function parseError(response: Response): Promise<any> {
     return await response.json();
   } catch {
     return null;
-  }
-}
-
-export class StudyAPIError extends Error {
-  constructor(
-    message: string,
-    public status?: number,
-    public details?: any
-  ) {
-    super(message);
-    this.name = 'StudyAPIError';
   }
 }
 
@@ -83,7 +76,7 @@ export async function createParticipantIdentity(): Promise<StudyParticipantIdent
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to create participant ID: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -109,7 +102,7 @@ export async function uploadSessionRecord(
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to upload session record: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -136,7 +129,7 @@ export async function uploadDelayedRecord(
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to upload delayed record: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -160,7 +153,7 @@ export async function getPendingDelayedTasks(participantId: string): Promise<Pen
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to fetch pending delayed tasks: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -200,7 +193,7 @@ export async function postStudyActivity(event: StudyActivityEventInput): Promise
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to track study activity: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -218,7 +211,7 @@ export async function getAdminReportIndex(
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to load report index: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -249,7 +242,7 @@ export async function getAdminMonitoringSummary(token: string): Promise<AdminMon
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to load monitoring summary: ${response.statusText}`,
       response.status,
       await parseError(response)
@@ -318,7 +311,7 @@ export async function downloadAdminReports(
   });
 
   if (!response.ok) {
-    throw new StudyAPIError(
+    throw new APIError(
       `Failed to export reports: ${response.statusText}`,
       response.status,
       await parseError(response)

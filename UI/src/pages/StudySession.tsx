@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import WebcamFeed from '../components/WebcamFeed';
 import LiveFeaturePanel from '../components/LiveFeaturePanel';
 import NasaTLXForm from '../components/NasaTLXForm';
+import ArithmeticChallengeBlock from '../components/study/ArithmeticChallengeBlock';
 import CuedRecallTest from '../components/study/CuedRecallTest';
 import PairedAssociateLearningBlock from '../components/study/PairedAssociateLearningBlock';
 import RecognitionTest from '../components/study/RecognitionTest';
@@ -11,6 +12,11 @@ import { FEATURE_CONFIG } from '../config/featureConfig';
 import { STUDY_CONFIG, STUDY_QUALITY_CONFIG, STUDY_RECORD_VERSION } from '../config/studyConfig';
 import { predictCognitiveLoad, testConnection } from '../services/apiClient';
 import { StudyAdaptiveController } from '../services/studyAdaptiveController';
+import {
+  getArithmeticPracticeProblem,
+  getArithmeticProblems,
+  summarizeArithmeticTrials,
+} from '../services/studyArithmetic';
 import { engineerFeatures, computeBaseline } from '../services/featureEngineering';
 import { computeWindowFeatures } from '../services/featureExtraction';
 import { computeSessionRuntimeDiagnostics } from '../services/studyRuntimeDiagnostics';
@@ -20,6 +26,10 @@ import { getStimulusItemsForBlock } from '../services/studyStimuli';
 import { WindowBuffer, validateWindowQuality } from '../services/windowBuffer';
 import { FrameFeatures, WindowFeatures } from '../types/features';
 import {
+  ArithmeticChallengeRecord,
+  ArithmeticDifficulty,
+  ArithmeticPhaseTag,
+  ArithmeticTrial,
   StudyAdaptiveMode,
   StudyBlockSummary,
   StudyCliSample,
@@ -42,9 +52,22 @@ type SessionPhase =
   | 'learn_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued'
+  | 'arithmetic_easy'
+  | 'arithmetic_medium'
+  | 'arithmetic_hard'
   | 'break'
   | 'nasa_tlx'
   | 'complete';
+
+const ARITHMETIC_PHASE_SEQUENCE: ReadonlyArray<{
+  phase: ArithmeticPhaseTag;
+  difficulty: ArithmeticDifficulty;
+  nextPhase: SessionPhase;
+}> = [
+  { phase: 'arithmetic_easy', difficulty: 'easy', nextPhase: 'arithmetic_medium' },
+  { phase: 'arithmetic_medium', difficulty: 'medium', nextPhase: 'arithmetic_hard' },
+  { phase: 'arithmetic_hard', difficulty: 'hard', nextPhase: 'nasa_tlx' },
+];
 
 const FALLBACK_SETUP: StudySetupState = {
   participantId: '',
@@ -80,6 +103,12 @@ function phaseToTag(phase: SessionPhase): StudyPhaseTag {
       return 'test_hard_recognition';
     case 'test_hard_cued':
       return 'test_hard_cued_recall';
+    case 'arithmetic_easy':
+      return 'arithmetic_easy';
+    case 'arithmetic_medium':
+      return 'arithmetic_medium';
+    case 'arithmetic_hard':
+      return 'arithmetic_hard';
     case 'break':
       return 'break';
     case 'nasa_tlx':
@@ -93,15 +122,15 @@ function isLearningPhase(phase: SessionPhase): boolean {
   return phase === 'learn_easy' || phase === 'learn_hard';
 }
 
+const ACTIVE_TASK_PHASES: SessionPhase[] = [
+  'learn_easy', 'learn_hard',
+  'test_easy_recognition', 'test_easy_cued',
+  'test_hard_recognition', 'test_hard_cued',
+  'arithmetic_easy', 'arithmetic_medium', 'arithmetic_hard',
+];
+
 function isActiveTaskPhase(phase: SessionPhase): boolean {
-  return (
-    phase === 'learn_easy' ||
-    phase === 'learn_hard' ||
-    phase === 'test_easy_recognition' ||
-    phase === 'test_easy_cued' ||
-    phase === 'test_hard_recognition' ||
-    phase === 'test_hard_cued'
-  );
+  return ACTIVE_TASK_PHASES.includes(phase);
 }
 
 function buildBlockSummary(
@@ -183,6 +212,7 @@ const StudySession: React.FC = () => {
   const [totalBlinkCount, setTotalBlinkCount] = useState(0);
 
   const [trials, setTrials] = useState<StudyTrialResult[]>([]);
+  const [arithmeticTrials, setArithmeticTrials] = useState<ArithmeticTrial[]>([]);
   const [cliSamples, setCliSamples] = useState<StudyCliSample[]>([]);
   const [featureWindows, setFeatureWindows] = useState<StudyFeatureWindow[]>([]);
   const windowIndexRef = useRef(0);
@@ -253,6 +283,34 @@ const StudySession: React.FC = () => {
     [assignment.form, assignment.sessionNumber, participantId, plan.hardItemCount]
   );
 
+  const arithmeticSeed = useMemo(
+    () => `${participantId}:${assignment.sessionNumber}`,
+    [assignment.sessionNumber, participantId]
+  );
+
+  const arithmeticProblems = useMemo(
+    () => ({
+      easy: getArithmeticProblems('easy', plan.arithmeticItemsPerDifficulty, arithmeticSeed),
+      medium: getArithmeticProblems('medium', plan.arithmeticItemsPerDifficulty, arithmeticSeed),
+      hard: getArithmeticProblems('hard', plan.arithmeticItemsPerDifficulty, arithmeticSeed),
+    }),
+    [arithmeticSeed, plan.arithmeticItemsPerDifficulty]
+  );
+
+  const arithmeticPracticeProblem = useMemo(
+    () =>
+      getArithmeticPracticeProblem(
+        arithmeticSeed,
+        arithmeticProblems.easy.map((problem) => problem.id)
+      ),
+    [arithmeticProblems, arithmeticSeed]
+  );
+
+  const arithmeticChallenge = useMemo<ArithmeticChallengeRecord | undefined>(() => {
+    if (arithmeticTrials.length === 0) return undefined;
+    return summarizeArithmeticTrials(arithmeticTrials);
+  }, [arithmeticTrials]);
+
   const persistDraft = useCallback(
     (override?: Partial<StudySessionRecord>) => {
       if (missingSetup) return;
@@ -275,6 +333,7 @@ const StudySession: React.FC = () => {
         featureWindows,
         interventions,
         trials,
+        arithmeticChallenge,
         blockSummaries,
         pendingDelayedTest: true,
         delayedDueAtIso: assignment.delayedDueAtIso,
@@ -285,6 +344,7 @@ const StudySession: React.FC = () => {
     [
       activeTaskSeconds,
       assignment,
+      arithmeticChallenge,
       blockSummaries,
       breakSeconds,
       cliSamples,
@@ -391,6 +451,7 @@ const StudySession: React.FC = () => {
       featureWindows,
       interventions,
       trials,
+      arithmeticChallenge,
       blockSummaries,
       runtimeDiagnostics,
       pendingDelayedTest: true,
@@ -411,6 +472,7 @@ const StudySession: React.FC = () => {
   }, [
     activeTaskSeconds,
     assignment,
+    arithmeticChallenge,
     blockSummaries,
     breakSeconds,
     cliSamples,
@@ -639,6 +701,14 @@ const StudySession: React.FC = () => {
     [interventions, pacingOffsetSeconds, plan.easyExposureSeconds, plan.hardExposureSeconds, transitionTo, trials]
   );
 
+  const completeArithmeticBlock = useCallback(
+    (newTrials: ArithmeticTrial[], nextPhase: SessionPhase) => {
+      setArithmeticTrials((prev) => [...prev, ...newTrials]);
+      transitionTo(nextPhase);
+    },
+    [transitionTo]
+  );
+
   const onModalAccept = () => {
     if (!pendingIntervention) {
       setModalOpen(false);
@@ -796,8 +866,25 @@ const StudySession: React.FC = () => {
               condition={assignment.condition}
               form={assignment.form}
               sessionStartMs={sessionStartMsRef.current}
-              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 2, 'hard', 'nasa_tlx')}
+              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 2, 'hard', 'arithmetic_easy')}
             />
+          )}
+
+          {ARITHMETIC_PHASE_SEQUENCE.map((cfg) =>
+            phase === cfg.phase ? (
+              <ArithmeticChallengeBlock
+                key={cfg.phase}
+                phase={cfg.phase}
+                problems={arithmeticProblems[cfg.difficulty]}
+                practiceProblem={cfg.phase === 'arithmetic_easy' ? arithmeticPracticeProblem : undefined}
+                transitionSeconds={cfg.phase !== 'arithmetic_easy' ? plan.arithmeticTransitionSeconds : undefined}
+                timeLimitSeconds={plan.arithmeticTimeLimitSeconds}
+                sessionStartMs={sessionStartMsRef.current}
+                condition={assignment.condition}
+                form={assignment.form}
+                onComplete={(blockTrials) => completeArithmeticBlock(blockTrials, cfg.nextPhase)}
+              />
+            ) : null
           )}
 
           {phase === 'break' && (
@@ -815,7 +902,7 @@ const StudySession: React.FC = () => {
             <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
               <h2 className="text-xl font-semibold text-gray-800">Session complete</h2>
               <p className="text-gray-600">
-                Proceed to summary to submit NASA-TLX and upload the study record.
+                Proceed to summary to submit NASA-TLX and upload the study record, including arithmetic performance.
               </p>
               <button
                 onClick={finishSession}

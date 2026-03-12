@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Union
 
 import numpy as np
 
-from src.cle.extract.features import compute_window_features
 from src.cle.logging_setup import get_logger
 from src.cle.utils.io import load_json, load_model_artifact
 
@@ -151,63 +150,4 @@ def predict_window(
         cli_raw = float(np.clip(cli_raw, 0.0, 1.0))
 
     cli = float(cli_raw)
-    return cli
-
-
-def extract_features_from_window(
-    frame_data: List[Dict],
-    config: Dict,
-    fps: float = 30.0,
-) -> Dict[str, float]:
-    """
-    Extract window-level features from list of per-frame features.
-
-    This is a convenience function that wraps compute_window_features.
-
-    Args:
-        frame_data: List of per-frame feature dictionaries
-        config: Configuration dictionary
-        fps: Frames per second
-
-    Returns:
-        Dictionary of window-level features
-
-    Example:
-        >>> frame_data = [
-        ...     {"ear_mean": 0.25, "pupil_mean": 0.3, "brightness": 120, "valid": True},
-        ...     {"ear_mean": 0.26, "pupil_mean": 0.31, "brightness": 121, "valid": True},
-        ...     # ... more frames
-        ... ]
-        >>> features = extract_features_from_window(frame_data, config, fps=30.0)
-        >>> cli = predict_window(features, artifacts)
-    """
-    features = compute_window_features(frame_data, config, fps)
-    return features
-
-
-def predict_from_frame_data(
-    frame_data: List[Dict],
-    artifacts: Dict,
-    config: Dict,
-    fps: float = 30.0,
-) -> float:
-    """
-    End-to-end prediction from per-frame features.
-
-    Combines feature extraction and prediction in one call.
-
-    Args:
-        frame_data: List of per-frame feature dictionaries
-        artifacts: Model artifacts from load_model()
-        config: Configuration dictionary
-        fps: Frames per second
-
-    Returns:
-        cli: Cognitive Load Index in [0, 1]
-    """
-    # Extract window features
-    window_features = extract_features_from_window(frame_data, config, fps)
-
-    # Predict
-    cli = predict_window(window_features, artifacts)
     return cli
