@@ -1,79 +1,54 @@
 # CI/CD Pipeline Documentation
 
-This repository uses GitHub Actions for continuous integration and testing.
+This repository uses GitHub Actions for continuous integration and CI-gated deployment to Azure VM.
 
 ## Workflows
 
 ### CI Pipeline (`ci.yml`)
 
 The CI pipeline runs automatically on:
-- Push to `main`, `master`, or `develop` branches
-- Pull requests targeting these branches
+- Push to `main`, `master`, `develop`, `deploy`, `thesis/prune`
+- Pull requests targeting `main`, `master`, `develop`, `deploy`, `thesis/prune`
 
-#### Jobs
+Jobs:
+- `test-ml-pipeline`: installs backend dependencies and runs `pytest` in `machine_learning/`
+- `test-ui`: installs frontend dependencies, builds UI, and runs tests in `UI/`
 
-**1. test-ml-pipeline**
-- Runs all Python tests in the Machine Learning pipeline
-- Generates code coverage reports
-- Uploads coverage to Codecov
-- Tests include:
-  - Feature extraction tests
-  - Windowing and preprocessing tests
-  - Model training and evaluation tests
-  - Integration tests
+### Deploy (`deploy.yml`)
 
-**2. test-ui**
-- Builds the React TypeScript UI
-- Runs frontend tests
-- Verifies that the UI compiles successfully
+Deploy runs only when:
+- CI Pipeline completes successfully for branch `thesis/prune`
+- Or manually via `workflow_dispatch`
 
-## Local Testing
+Deployment is done over SSH by running `scripts/deploy.sh` on the VM.
 
-Before pushing code, you can run tests locally:
+## Required GitHub Secrets
 
-### Machine Learning Tests
+Configure these in repository Settings -> Secrets and variables -> Actions:
+
+- `SSH_HOST`: Azure VM public host or IP
+- `SSH_USER`: SSH username used on VM
+- `SSH_PORT`: SSH port (usually `22`)
+- `SSH_KEY`: private key matching the VM authorized key
+- `STUDY_DOMAIN`: public domain pointing to VM (example: `study.example.com`)
+- `CLE_ADMIN_TOKEN`: long random bearer token used by `/admin/*` report endpoints
+
+## Optional Deployment Environment Variables (`/opt/cle-app/.env.production`)
+
+- `STUDY_DOMAIN=...`
+- `CLE_ALLOWED_ORIGINS=https://<domain>`
+- `STUDY_PUBLIC_URL=https://<domain>`
+- `CLE_ADMIN_TOKEN=<long-random-secret>`
+- `REPORTS_HOST_DIR=/opt/cle-data/reports`
+
+## Local Validation Before Push
+
 ```bash
-cd "Machine Learning"
-python -m pytest tests/ -v
+cd machine_learning && python -m pytest tests/ -q
+cd UI && npm run build
+cd UI && npm test -- --watchAll=false --passWithNoTests
 ```
 
-### With Coverage
-```bash
-cd "Machine Learning"
-python -m pytest tests/ -v --cov=src --cov-report=term
-```
+## Deployment Branch
 
-### UI Build
-```bash
-cd UI
-npm run build
-```
-
-## Adding New Tests
-
-1. Create test files in the appropriate `tests/` directory
-2. Follow the naming convention: `test_*.py` for Python tests
-3. Ensure tests are independent and can run in any order
-4. The CI pipeline will automatically pick up and run new tests
-
-## Troubleshooting CI Failures
-
-### Python Tests Failing
-- Check test output in the GitHub Actions logs
-- Verify all dependencies are listed in `requirements.txt`
-- Ensure `PYTHONPATH` is set correctly (handled by workflow)
-
-### UI Build Failing
-- Check for TypeScript compilation errors
-- Verify all npm dependencies are in `package.json`
-- Test locally with `npm run build`
-
-## Status Badge
-
-Add this to your main README.md to show CI status:
-
-```markdown
-[![CI Pipeline](https://github.com/YOUR_USERNAME/FYP/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/FYP/actions/workflows/ci.yml)
-```
-
-Replace `YOUR_USERNAME` with your GitHub username.
+Production VM deployment tracks: `thesis/prune`.

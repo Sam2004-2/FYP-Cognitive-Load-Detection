@@ -3,12 +3,14 @@ import { NASATLXScores } from '../types';
 export type StudyCondition = 'adaptive' | 'baseline';
 export type StudySessionNumber = 1 | 2;
 export type StudyForm = 'A' | 'B';
+export type StudyAdaptiveMode = 'absolute' | 'relative';
 
 export type StudyPhaseTag =
   | 'baseline_calibration'
   | 'learning_easy'
   | 'test_easy_recognition'
   | 'test_easy_cued_recall'
+  | 'arithmetic_challenge'
   | 'learning_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued_recall'
@@ -30,7 +32,7 @@ export type StudyInterventionOutcome =
   | 'suppressed'
   | 'paused';
 
-export type StudyTrialKind = 'learning' | 'recognition' | 'cued_recall';
+export type StudyTrialKind = 'learning' | 'recognition' | 'cued_recall' | 'arithmetic';
 export type StudyDifficulty = 'easy' | 'hard';
 
 export interface StudyAssignment {
@@ -59,7 +61,14 @@ export interface StudySessionPlan {
   adaptationCooldownSeconds: number;
   decisionWindowSeconds: number;
   smoothingWindows: number;
-  overloadThreshold: number;
+  adaptiveMode: StudyAdaptiveMode;
+  absoluteThreshold: number;
+  relativeZThreshold: number;
+  warmupWindows: number;
+  minStdEpsilon: number;
+  overloadThreshold?: number;
+  /** Number of arithmetic challenge questions shown between easy and hard blocks. */
+  arithmeticQuestionCount: number;
 }
 
 export interface StudyCliQualityFlags {
@@ -73,9 +82,22 @@ export interface StudyCliSample {
   phase: StudyPhaseTag;
   rawCli: number;
   smoothedCli: number;
+  /** In absolute mode: smoothed CLI (0-1). In relative mode: z-score (unbounded). Interpret via decisionMode. */
+  decisionCli?: number;
+  decisionThreshold?: number;
+  decisionMode?: StudyAdaptiveMode;
   validFrameRatio: number;
   illuminationStd: number;
   qualityFlags: StudyCliQualityFlags;
+}
+
+export interface StudyFeatureWindow {
+  timestampMs: number;
+  sessionTimeS: number;
+  phase: StudyPhaseTag;
+  windowIndex: number;
+  isCalibration: boolean;
+  features: Record<string, number>;
 }
 
 export interface StudyInterventionEvent {
@@ -103,6 +125,18 @@ export interface StudyRecognitionChoice {
   isCorrect: boolean;
 }
 
+export type StudyRecallScoringMethod = 'exact_normalized' | 'tolerant_damerau_1';
+export type StudyRecallMatchType = 'exact' | 'near_match' | 'ambiguous_near_match' | 'mismatch';
+
+export interface StudyRecallScoring {
+  version: 2;
+  method: StudyRecallScoringMethod;
+  matchType: StudyRecallMatchType;
+  normalizedResponse: string;
+  normalizedTarget: string;
+  distance: number;
+}
+
 export interface StudyTrialResult {
   trialId: string;
   timestampMs: number;
@@ -117,10 +151,13 @@ export interface StudyTrialResult {
   recognitionChoices?: string[];
   selectedChoice?: string;
   responseText?: string;
+  scoring?: StudyRecallScoring;
   correct: boolean;
   reactionTimeMs: number;
   condition: StudyCondition;
   form: StudyForm;
+  /** 1 = easy, 2 = medium, 3 = hard. Only set for arithmetic trials. */
+  arithmeticDifficulty?: 1 | 2 | 3;
 }
 
 export interface StudyBlockSummary {
@@ -133,6 +170,17 @@ export interface StudyBlockSummary {
   cuedRecallMeanRtMs: number;
   effectiveExposureSeconds: number;
   adaptationApplied: boolean;
+}
+
+export interface StudyRuntimeDiagnostics {
+  phaseIntegrityOk: boolean;
+  phaseCounts: Record<string, number>;
+  uniquePhases?: StudyPhaseTag[];
+  learningPhaseSampleCount?: number;
+  adaptiveTriggerCount: number;
+  adaptiveSuppressionCount: number;
+  lowConfidencePauseCount: number;
+  notes?: string[];
 }
 
 export interface StudySessionRecord {
@@ -151,9 +199,11 @@ export interface StudySessionRecord {
   activeTaskSeconds: number;
   breakSeconds: number;
   cliSamples: StudyCliSample[];
+  featureWindows: StudyFeatureWindow[];
   interventions: StudyInterventionEvent[];
   trials: StudyTrialResult[];
   blockSummaries: StudyBlockSummary[];
+  runtimeDiagnostics?: StudyRuntimeDiagnostics;
   nasaTlx?: NASATLXScores;
   pendingDelayedTest: boolean;
   delayedDueAtIso: string;
@@ -185,4 +235,109 @@ export interface StudySetupState {
 
 export interface StudySummaryState {
   record: StudySessionRecord;
+}
+
+export interface StudyParticipantIdentity {
+  participantId: string;
+  createdAtIso: string;
+}
+
+export interface StudySessionUploadResponse {
+  success: boolean;
+  recordId: string;
+  storedAtIso: string;
+}
+
+export interface StudyDelayedUploadResponse {
+  success: boolean;
+  recordId: string;
+  storedAtIso: string;
+}
+
+export interface PendingDelayedTask {
+  linkedSessionRecordId: string;
+  participantId: string;
+  sessionNumber: StudySessionNumber;
+  condition: StudyCondition;
+  form: StudyForm;
+  dueAtIso: string;
+  easyItems: StudyStimulusItem[];
+  hardItems: StudyStimulusItem[];
+}
+
+export interface AdminExportQuery {
+  participantId?: string;
+  fromIso?: string;
+  toIso?: string;
+  format?: 'zip' | 'json';
+}
+
+export interface StudyActivityEventInput {
+  eventType: string;
+  page: string;
+  participantId?: string;
+  visitorId?: string;
+  sessionNumber?: number;
+  condition?: StudyCondition;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AdminReportIndexRecord {
+  participantId: string;
+  kind: 'sessions' | 'delayed';
+  recordId: string;
+  eventTimeIso?: string | null;
+  storedAtIso: string;
+  path: string;
+}
+
+export interface AdminReportIndexResponse {
+  generatedAtIso: string;
+  count: number;
+  records: AdminReportIndexRecord[];
+}
+
+export interface AdminMonitoringDailyUpload {
+  date: string;
+  sessionRecords: number;
+  delayedRecords: number;
+  totalRecords: number;
+}
+
+export interface AdminMonitoringRecentRecord {
+  participantId: string;
+  kind: 'sessions' | 'delayed';
+  recordId: string;
+  condition?: string;
+  sessionNumber?: number;
+  storedAtIso: string;
+}
+
+export interface AdminMonitoringActivityEvent {
+  occurredAtIso: string;
+  eventType: string;
+  page: string;
+  participantId?: string;
+  visitorId?: string;
+  sessionNumber?: number;
+  condition?: string;
+}
+
+export interface AdminMonitoringActivitySummary {
+  activeLast15m: number;
+  activeLast60m: number;
+  visitorsLast24h: number;
+  pageViewsLast24h: number;
+  pageViewCounts: Record<string, number>;
+  recentEvents: AdminMonitoringActivityEvent[];
+}
+
+export interface AdminMonitoringSummary {
+  generatedAtIso: string;
+  totals: Record<string, number>;
+  conditionCounts: Record<string, number>;
+  interventionCounts: Record<string, number>;
+  dailyUploads: AdminMonitoringDailyUpload[];
+  recentRecords: AdminMonitoringRecentRecord[];
+  activity: AdminMonitoringActivitySummary;
 }

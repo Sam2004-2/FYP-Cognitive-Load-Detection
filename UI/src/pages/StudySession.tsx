@@ -6,6 +6,7 @@ import NasaTLXForm from '../components/NasaTLXForm';
 import CuedRecallTest from '../components/study/CuedRecallTest';
 import PairedAssociateLearningBlock from '../components/study/PairedAssociateLearningBlock';
 import RecognitionTest from '../components/study/RecognitionTest';
+import ArithmeticChallenge from '../components/study/ArithmeticChallenge';
 import StudyInterventionModal from '../components/study/StudyInterventionModal';
 import { FEATURE_CONFIG } from '../config/featureConfig';
 import { STUDY_CONFIG, STUDY_QUALITY_CONFIG, STUDY_RECORD_VERSION } from '../config/studyConfig';
@@ -13,13 +14,17 @@ import { predictCognitiveLoad, testConnection } from '../services/apiClient';
 import { StudyAdaptiveController } from '../services/studyAdaptiveController';
 import { engineerFeatures, computeBaseline } from '../services/featureEngineering';
 import { computeWindowFeatures } from '../services/featureExtraction';
+import { computeSessionRuntimeDiagnostics } from '../services/studyRuntimeDiagnostics';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { createSessionRecordId, saveSessionDraft } from '../services/studyStorage';
 import { getStimulusItemsForBlock } from '../services/studyStimuli';
 import { WindowBuffer, validateWindowQuality } from '../services/windowBuffer';
 import { FrameFeatures, WindowFeatures } from '../types/features';
 import {
+  StudyAdaptiveMode,
   StudyBlockSummary,
   StudyCliSample,
+  StudyFeatureWindow,
   StudyInterventionEvent,
   StudyCondition,
   StudyForm,
@@ -35,6 +40,7 @@ type SessionPhase =
   | 'learn_easy'
   | 'test_easy_recognition'
   | 'test_easy_cued'
+  | 'arithmetic_challenge'
   | 'learn_hard'
   | 'test_hard_recognition'
   | 'test_hard_cued'
@@ -70,6 +76,8 @@ function phaseToTag(phase: SessionPhase): StudyPhaseTag {
       return 'test_easy_recognition';
     case 'test_easy_cued':
       return 'test_easy_cued_recall';
+    case 'arithmetic_challenge':
+      return 'arithmetic_challenge';
     case 'learn_hard':
       return 'learning_hard';
     case 'test_hard_recognition':
@@ -95,6 +103,7 @@ function isActiveTaskPhase(phase: SessionPhase): boolean {
     phase === 'learn_hard' ||
     phase === 'test_easy_recognition' ||
     phase === 'test_easy_cued' ||
+    phase === 'arithmetic_challenge' ||
     phase === 'test_hard_recognition' ||
     phase === 'test_hard_cued'
   );
@@ -157,15 +166,22 @@ const StudySession: React.FC = () => {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
 
   const [phase, setPhase] = useState<SessionPhase>('baseline');
+  const phaseRef = useRef<SessionPhase>('baseline');
   const [resumePhase, setResumePhase] = useState<SessionPhase | null>(null);
   const [phaseSeconds, setPhaseSeconds] = useState(0);
   const [totalSessionSeconds, setTotalSessionSeconds] = useState(0);
+  const totalSessionSecondsRef = useRef(0);
   const [activeTaskSeconds, setActiveTaskSeconds] = useState(0);
   const [breakSeconds, setBreakSeconds] = useState(0);
 
   const [currentLoad, setCurrentLoad] = useState(0.5);
+  const currentLoadRef = useRef(0.5);
   const [isCalibrated, setIsCalibrated] = useState(false);
   const [lowConfidenceMode, setLowConfidenceMode] = useState(false);
+  const [decisionMode, setDecisionMode] = useState<StudyAdaptiveMode>(plan.adaptiveMode);
+  const [decisionCli, setDecisionCli] = useState<number | null>(null);
+  const [decisionThreshold, setDecisionThreshold] = useState<number | null>(null);
+  const [decisionOnCooldown, setDecisionOnCooldown] = useState(false);
 
   const [currentFrameFeatures, setCurrentFrameFeatures] = useState<FrameFeatures | null>(null);
   const [currentWindowFeatures, setCurrentWindowFeatures] = useState<WindowFeatures | null>(null);
@@ -173,6 +189,8 @@ const StudySession: React.FC = () => {
 
   const [trials, setTrials] = useState<StudyTrialResult[]>([]);
   const [cliSamples, setCliSamples] = useState<StudyCliSample[]>([]);
+  const [featureWindows, setFeatureWindows] = useState<StudyFeatureWindow[]>([]);
+  const windowIndexRef = useRef(0);
   const [interventions, setInterventions] = useState<StudyInterventionEvent[]>([]);
   const [blockSummaries, setBlockSummaries] = useState<StudyBlockSummary[]>([]);
 
@@ -204,6 +222,19 @@ const StudySession: React.FC = () => {
   if (!recordIdRef.current && !missingSetup) {
     recordIdRef.current = createSessionRecordId(participantId, assignment.sessionNumber, assignment.condition);
   }
+
+  const setPhaseTracked = useCallback((nextPhase: SessionPhase) => {
+    phaseRef.current = nextPhase;
+    setPhase(nextPhase);
+  }, []);
+
+  useEffect(() => {
+    totalSessionSecondsRef.current = totalSessionSeconds;
+  }, [totalSessionSeconds]);
+
+  useEffect(() => {
+    currentLoadRef.current = currentLoad;
+  }, [currentLoad]);
 
   const easyItems = useMemo(
     () =>
@@ -246,6 +277,7 @@ const StudySession: React.FC = () => {
         activeTaskSeconds,
         breakSeconds,
         cliSamples,
+        featureWindows,
         interventions,
         trials,
         blockSummaries,
@@ -261,6 +293,7 @@ const StudySession: React.FC = () => {
       blockSummaries,
       breakSeconds,
       cliSamples,
+      featureWindows,
       interventions,
       missingSetup,
       participantId,
@@ -280,6 +313,16 @@ const StudySession: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (missingSetup) return;
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SESSION,
+      participantId,
+      sessionNumber: assignment.sessionNumber,
+      condition: assignment.condition,
+    });
+  }, [assignment.condition, assignment.sessionNumber, missingSetup, participantId]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setTotalSessionSeconds((prev) => prev + 1);
       setPhaseSeconds((prev) => prev + 1);
@@ -296,22 +339,22 @@ const StudySession: React.FC = () => {
 
   useEffect(() => {
     if (phase === 'baseline' && phaseSeconds >= plan.baselineSeconds) {
-      setPhase('learn_easy');
+      setPhaseTracked('learn_easy');
       setPhaseSeconds(0);
     }
-  }, [phase, phaseSeconds, plan.baselineSeconds]);
+  }, [phase, phaseSeconds, plan.baselineSeconds, setPhaseTracked]);
 
   useEffect(() => {
     if (phase === 'break' && phaseSeconds >= plan.microBreakSeconds) {
       if (resumePhase) {
-        setPhase(resumePhase);
+        setPhaseTracked(resumePhase);
       } else {
-        setPhase('learn_easy');
+        setPhaseTracked('learn_easy');
       }
       setResumePhase(null);
       setPhaseSeconds(0);
     }
-  }, [phase, phaseSeconds, plan.microBreakSeconds, resumePhase]);
+  }, [phase, phaseSeconds, plan.microBreakSeconds, resumePhase, setPhaseTracked]);
 
   useEffect(() => {
     persistDraft();
@@ -321,18 +364,19 @@ const StudySession: React.FC = () => {
     (nextPhase: SessionPhase) => {
       if (scheduledBreak && nextPhase !== 'break') {
         setResumePhase(nextPhase);
-        setPhase('break');
+        setPhaseTracked('break');
         setPhaseSeconds(0);
         setScheduledBreak(false);
         return;
       }
-      setPhase(nextPhase);
+      setPhaseTracked(nextPhase);
       setPhaseSeconds(0);
     },
-    [scheduledBreak]
+    [scheduledBreak, setPhaseTracked]
   );
 
   const finishSession = useCallback(() => {
+    const runtimeDiagnostics = computeSessionRuntimeDiagnostics(cliSamples, interventions);
     const completedRecord: StudySessionRecord = {
       recordVersion: STUDY_RECORD_VERSION,
       recordId: recordIdRef.current,
@@ -349,14 +393,25 @@ const StudySession: React.FC = () => {
       activeTaskSeconds,
       breakSeconds,
       cliSamples,
+      featureWindows,
       interventions,
       trials,
       blockSummaries,
+      runtimeDiagnostics,
       pendingDelayedTest: true,
       delayedDueAtIso: assignment.delayedDueAtIso,
     };
 
     persistDraft(completedRecord);
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SESSION_COMPLETE,
+      participantId,
+      sessionNumber: assignment.sessionNumber,
+      condition: assignment.condition,
+      metadata: {
+        recordId: recordIdRef.current,
+      },
+    });
     navigate('/study/summary', { state: { record: completedRecord } });
   }, [
     activeTaskSeconds,
@@ -364,6 +419,7 @@ const StudySession: React.FC = () => {
     blockSummaries,
     breakSeconds,
     cliSamples,
+    featureWindows,
     interventions,
     navigate,
     participantId,
@@ -393,7 +449,28 @@ const StudySession: React.FC = () => {
     async (windowFeatures: WindowFeatures) => {
       if (backendStatus !== 'connected') return;
 
+      const currentPhase = phaseRef.current;
+      const phaseTag = phaseToTag(currentPhase);
+      const sessionTimeS = totalSessionSecondsRef.current;
+      const now = Date.now();
+      const wi = windowIndexRef.current++;
+      const isLearning = isLearningPhase(currentPhase);
+
       if (!baselineRef.current) {
+        // Log raw calibration window features (base features only, no engineering yet)
+        const calibrationFeatures: Record<string, number> = {};
+        for (const [key, value] of Object.entries(windowFeatures)) {
+          if (typeof value === 'number') calibrationFeatures[key] = value;
+        }
+        setFeatureWindows((prev) => [...prev, {
+          timestampMs: now,
+          sessionTimeS,
+          phase: phaseTag,
+          windowIndex: wi,
+          isCalibration: true,
+          features: calibrationFeatures,
+        }]);
+
         baselineSamplesRef.current.push(windowFeatures);
         if (baselineSamplesRef.current.length >= 4) {
           baselineRef.current = computeBaseline(baselineSamplesRef.current.slice(-4));
@@ -406,63 +483,95 @@ const StudySession: React.FC = () => {
       const engineered = engineerFeatures(windowFeatures, baselineRef.current, prevCenteredRef.current);
       prevCenteredRef.current = engineered.nextPrevCentered;
 
+      // Log the full 42-feature engineered vector for every window
+      setFeatureWindows((prev) => [...prev, {
+        timestampMs: now,
+        sessionTimeS,
+        phase: phaseTag,
+        windowIndex: wi,
+        isCalibration: false,
+        features: engineered.featureMap,
+      }]);
+
       try {
         const result = await predictCognitiveLoad(engineered.featureMap);
         if (!result.success) return;
 
         const alpha = FEATURE_CONFIG.realtime.smoothing_alpha;
-        const smoothed = alpha * result.cli + (1 - alpha) * currentLoad;
+        const smoothed = alpha * result.cli + (1 - alpha) * currentLoadRef.current;
 
+        currentLoadRef.current = smoothed;
         setCurrentLoad(smoothed);
 
-        const phaseTag = phaseToTag(phase);
         const qualityFlags = {
           lowValidFrameRatio: windowFeatures.valid_frame_ratio < STUDY_QUALITY_CONFIG.validFrameRatioMin,
           unstableIllumination: windowFeatures.std_brightness > STUDY_QUALITY_CONFIG.illuminationStdMax,
         };
 
+        let sampleDecisionCli: number | undefined;
+        let sampleDecisionThreshold: number | undefined;
+        let sampleDecisionMode: StudyAdaptiveMode | undefined;
+
+        if (isLearning) {
+          const decision = adaptiveControllerRef.current.ingest(
+            {
+              timestampMs: now,
+              rawCli: result.cli,
+              smoothedCli: smoothed,
+              validFrameRatio: windowFeatures.valid_frame_ratio,
+              illuminationStd: windowFeatures.std_brightness,
+              sessionTimeS,
+              phase: phaseTag,
+            },
+            assignment.condition
+          );
+
+          setLowConfidenceMode(decision.state.lowConfidenceMode);
+          setPacingOffsetSeconds(decision.state.pacingOffsetSeconds);
+          setHardInterferenceReduced(decision.state.difficultySteppedDown);
+          setDecisionOnCooldown(decision.metrics?.onCooldown ?? decision.state.onCooldown);
+          setDecisionMode(decision.metrics?.decisionMode ?? plan.adaptiveMode);
+          setDecisionCli(decision.metrics?.decisionCli ?? null);
+          setDecisionThreshold(decision.metrics?.decisionThreshold ?? null);
+
+          sampleDecisionCli = decision.metrics?.decisionCli;
+          sampleDecisionThreshold = decision.metrics?.decisionThreshold;
+          sampleDecisionMode = decision.metrics?.decisionMode;
+
+          handleAdaptiveDecision(decision.event, decision.actionType);
+        } else {
+          const controllerState = adaptiveControllerRef.current.getState();
+          setDecisionOnCooldown(controllerState.onCooldown);
+          setDecisionMode(plan.adaptiveMode);
+          setDecisionCli(null);
+          setDecisionThreshold(null);
+        }
+
         const cliSample: StudyCliSample = {
-          timestampMs: Date.now(),
-          sessionTimeS: totalSessionSeconds,
+          timestampMs: now,
+          sessionTimeS,
           phase: phaseTag,
           rawCli: result.cli,
           smoothedCli: smoothed,
+          decisionCli: sampleDecisionCli,
+          decisionThreshold: sampleDecisionThreshold,
+          decisionMode: sampleDecisionMode,
           validFrameRatio: windowFeatures.valid_frame_ratio,
           illuminationStd: windowFeatures.std_brightness,
           qualityFlags,
         };
 
         setCliSamples((prev) => [...prev, cliSample]);
-
-        if (!isLearningPhase(phase)) return;
-
-        const decision = adaptiveControllerRef.current.ingest(
-          {
-            timestampMs: cliSample.timestampMs,
-            cli: result.cli,
-            validFrameRatio: windowFeatures.valid_frame_ratio,
-            illuminationStd: windowFeatures.std_brightness,
-            sessionTimeS: totalSessionSeconds,
-            phase: phaseTag,
-          },
-          assignment.condition
-        );
-
-        setLowConfidenceMode(decision.state.lowConfidenceMode);
-        setPacingOffsetSeconds(decision.state.pacingOffsetSeconds);
-        setHardInterferenceReduced(decision.state.difficultySteppedDown);
-
-        handleAdaptiveDecision(decision.event, decision.actionType);
       } catch (error) {
         console.error('Prediction failed:', error);
       }
     },
-    [assignment.condition, backendStatus, currentLoad, handleAdaptiveDecision, phase, totalSessionSeconds]
+    [assignment.condition, backendStatus, handleAdaptiveDecision, plan.adaptiveMode]
   );
 
   const handleFrameFeatures = useCallback(
     (frameFeatures: FrameFeatures) => {
-      if (phase === 'complete') return;
+      if (phaseRef.current === 'complete') return;
 
       setCurrentFrameFeatures(frameFeatures);
 
@@ -497,7 +606,7 @@ const StudySession: React.FC = () => {
         void handlePrediction(wFeatures);
       }
     },
-    [handlePrediction, phase]
+    [handlePrediction]
   );
 
   const completeLearningBlock = useCallback(
@@ -512,6 +621,14 @@ const StudySession: React.FC = () => {
     (recognitionTrials: StudyTrialResult[], nextPhase: SessionPhase) => {
       setTrials((prev) => [...prev, ...recognitionTrials]);
       transitionTo(nextPhase);
+    },
+    [transitionTo]
+  );
+
+  const completeArithmeticBlock = useCallback(
+    (arithmeticTrials: StudyTrialResult[]) => {
+      setTrials((prev) => [...prev, ...arithmeticTrials]);
+      transitionTo('learn_hard');
     },
     [transitionTo]
   );
@@ -649,7 +766,20 @@ const StudySession: React.FC = () => {
               condition={assignment.condition}
               form={assignment.form}
               sessionStartMs={sessionStartMsRef.current}
-              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 1, 'easy', 'learn_hard')}
+              onComplete={(blockTrials) => completeCuedBlock(blockTrials, 1, 'easy', 'arithmetic_challenge')}
+            />
+          )}
+
+          {phase === 'arithmetic_challenge' && (
+            <ArithmeticChallenge
+              key="arithmetic_challenge"
+              questionCount={plan.arithmeticQuestionCount}
+              phase="arithmetic_challenge"
+              condition={assignment.condition}
+              form={assignment.form}
+              sessionStartMs={sessionStartMsRef.current}
+              participantSeed={`${participantId}:arith:${assignment.sessionNumber}`}
+              onComplete={completeArithmeticBlock}
             />
           )}
 
@@ -711,7 +841,7 @@ const StudySession: React.FC = () => {
             <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
               <h2 className="text-xl font-semibold text-gray-800">Session complete</h2>
               <p className="text-gray-600">
-                Proceed to summary to submit NASA-TLX and export study artifacts.
+                Proceed to summary to submit NASA-TLX and upload the study record.
               </p>
               <button
                 onClick={finishSession}
@@ -759,8 +889,28 @@ const StudySession: React.FC = () => {
               <span>{backendStatus}</span>
             </div>
             <div className="flex justify-between">
+              <span>Phase tag</span>
+              <span>{phaseToTag(phase)}</span>
+            </div>
+            <div className="flex justify-between">
               <span>CLI</span>
               <span>{currentLoad.toFixed(3)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Decision mode</span>
+              <span>{decisionMode}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Decision CLI</span>
+              <span>{decisionCli === null ? 'n/a' : decisionCli.toFixed(3)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Active threshold</span>
+              <span>{decisionThreshold === null ? 'n/a' : decisionThreshold.toFixed(3)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Trigger cooldown</span>
+              <span>{decisionOnCooldown ? 'on' : 'off'}</span>
             </div>
             <div className="flex justify-between">
               <span>Calibrated</span>

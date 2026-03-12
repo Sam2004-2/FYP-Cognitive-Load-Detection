@@ -3,6 +3,7 @@ import { StudyDelayedTestRecord, StudySessionRecord } from '../types/study';
 export interface StudyExportTables {
   session_summary: string;
   cli_windows: string;
+  feature_windows: string;
   trials: string;
   interventions: string;
   tlx: string;
@@ -67,6 +68,12 @@ export function buildStudyExportTables(
     active_task_seconds: s.activeTaskSeconds,
     break_seconds: s.breakSeconds,
     intervention_count: s.interventions.filter((e) => e.outcome === 'applied').length,
+    phase_integrity_ok: s.runtimeDiagnostics?.phaseIntegrityOk ?? '',
+    learning_phase_sample_count: s.runtimeDiagnostics?.learningPhaseSampleCount ?? '',
+    unique_phases: s.runtimeDiagnostics?.uniquePhases?.join('|') ?? '',
+    adaptive_trigger_count: s.runtimeDiagnostics?.adaptiveTriggerCount ?? '',
+    adaptive_suppression_count: s.runtimeDiagnostics?.adaptiveSuppressionCount ?? '',
+    low_confidence_pause_count: s.runtimeDiagnostics?.lowConfidencePauseCount ?? '',
     delayed_due_at: s.delayedDueAtIso,
     delayed_pending: s.pendingDelayedTest,
   }));
@@ -83,6 +90,9 @@ export function buildStudyExportTables(
       phase: sample.phase,
       raw_cli: sample.rawCli,
       smoothed_cli: sample.smoothedCli,
+      decision_cli: sample.decisionCli ?? '',
+      decision_threshold: sample.decisionThreshold ?? '',
+      decision_mode: sample.decisionMode ?? '',
       valid_frame_ratio: sample.validFrameRatio,
       illumination_std: sample.illuminationStd,
       low_vfr_flag: sample.qualityFlags.lowValidFrameRatio,
@@ -90,8 +100,25 @@ export function buildStudyExportTables(
     }))
   );
 
+  const featureRows = sessions.flatMap((s) =>
+    (s.featureWindows ?? []).map((fw) => ({
+      record_id: s.recordId,
+      participant_id: s.participantId,
+      session_number: s.sessionNumber,
+      condition: s.condition,
+      form: s.form,
+      timestamp_ms: fw.timestampMs,
+      session_time_s: fw.sessionTimeS,
+      phase: fw.phase,
+      window_index: fw.windowIndex,
+      is_calibration: fw.isCalibration,
+      ...fw.features,
+    }))
+  );
+
   const trialRows = sessions.flatMap((s) =>
     s.trials.map((trial) => ({
+      record_version: s.recordVersion,
       record_id: s.recordId,
       participant_id: s.participantId,
       session_number: s.sessionNumber,
@@ -109,6 +136,12 @@ export function buildStudyExportTables(
       selected_choice: trial.selectedChoice ?? '',
       response_text: trial.responseText ?? '',
       correct: trial.correct,
+      scoring_version: trial.scoring?.version ?? '',
+      scoring_method: trial.scoring?.method ?? '',
+      scoring_match_type: trial.scoring?.matchType ?? '',
+      normalized_response: trial.scoring?.normalizedResponse ?? '',
+      normalized_target: trial.scoring?.normalizedTarget ?? '',
+      scoring_distance: trial.scoring?.distance ?? '',
       reaction_time_ms: trial.reactionTimeMs,
       timestamp_ms: trial.timestampMs,
       session_time_s: trial.sessionTimeS,
@@ -152,6 +185,7 @@ export function buildStudyExportTables(
 
   const delayedRows = delayedTests.flatMap((d) =>
     d.trials.map((trial) => ({
+      record_version: d.recordVersion,
       delayed_record_id: d.recordId,
       linked_session_record_id: d.linkedSessionRecordId,
       participant_id: d.participantId,
@@ -167,6 +201,12 @@ export function buildStudyExportTables(
       cue: trial.cue,
       target: trial.target,
       correct: trial.correct,
+      scoring_version: trial.scoring?.version ?? '',
+      scoring_method: trial.scoring?.method ?? '',
+      scoring_match_type: trial.scoring?.matchType ?? '',
+      normalized_response: trial.scoring?.normalizedResponse ?? '',
+      normalized_target: trial.scoring?.normalizedTarget ?? '',
+      scoring_distance: trial.scoring?.distance ?? '',
       reaction_time_ms: trial.reactionTimeMs,
       selected_choice: trial.selectedChoice ?? '',
       response_text: trial.responseText ?? '',
@@ -177,6 +217,7 @@ export function buildStudyExportTables(
   return {
     session_summary: toCsv(sessionSummaryRows),
     cli_windows: toCsv(cliRows),
+    feature_windows: toCsv(featureRows),
     trials: toCsv(trialRows),
     interventions: toCsv(interventionRows),
     tlx: toCsv(tlxRows),

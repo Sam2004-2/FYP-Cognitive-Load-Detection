@@ -6,5 +6,3 @@ export interface NASATLXScores {
   effort: number;
   frustration: number;
 }
-
-export type LoadLevel = 'low' | 'medium' | 'high';

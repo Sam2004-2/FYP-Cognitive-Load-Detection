@@ -1,11 +1,19 @@
 services:
   backend:
     build:
-      context: ./Machine Learning
+      context: ./machine_learning
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    environment:
+      CLE_MODELS_DIR: ${CLE_MODELS_DIR:-models/video_physio_regression_z01_geom}
+      CLE_REPORTS_DIR: ${CLE_REPORTS_DIR:-/app/data/reports}
+      CLE_ALLOWED_ORIGINS: ${CLE_ALLOWED_ORIGINS:-*}
+      CLE_ADMIN_TOKEN: ${CLE_ADMIN_TOKEN:-}
+      STUDY_PUBLIC_URL: ${STUDY_PUBLIC_URL:-}
+    volumes:
+      - ${REPORTS_HOST_DIR:-/opt/cle-data/reports}:/app/data/reports
     restart: unless-stopped
+    expose:
+      - "8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -19,9 +27,28 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_URL: ""
-    ports:
-      - "80:80"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - frontend
+    environment:
+      STUDY_DOMAIN: ${STUDY_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

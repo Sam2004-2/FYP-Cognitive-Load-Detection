@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import NasaTLXForm from '../components/NasaTLXForm';
+import { StudyAPIError, uploadSessionRecord } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { finalizeSession, exportStudyPackage } from '../services/studyStorage';
 import { createDelayedPacket } from '../services/studyStimuli';
 import { triggerDownload } from '../services/studyExport';
@@ -39,7 +41,23 @@ const StudySummary: React.FC = () => {
   const state = location.state as StudySummaryState | undefined;
 
   const [record, setRecord] = useState<StudySessionRecord | null>(state?.record ?? null);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(Boolean(state?.record?.nasaTlx));
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
+  const missingCliSamples = record ? record.cliSamples.length === 0 : false;
+
+  useEffect(() => {
+    if (!state?.record) return;
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_SUMMARY,
+      participantId: state.record.participantId,
+      sessionNumber: state.record.sessionNumber,
+      condition: state.record.condition,
+      metadata: {
+        recordId: state.record.recordId,
+      },
+    });
+  }, [state?.record]);
 
   const summary = useMemo(() => {
     if (!record) return null;
@@ -80,7 +98,15 @@ const StudySummary: React.FC = () => {
     );
   }
 
-  const submitTlx = (scores: NASATLXScores) => {
+  const submitTlx = async (scores: NASATLXScores) => {
+    if (record.cliSamples.length === 0) {
+      setUploadStatus('error');
+      setUploadMessage(
+        'Cannot finalize or upload this session because no CLI samples were captured. Repeat the session with working webcam/backend capture.'
+      );
+      return;
+    }
+
     const updated: StudySessionRecord = {
       ...record,
       nasaTlx: scores,
@@ -89,6 +115,23 @@ const StudySummary: React.FC = () => {
     setRecord(updated);
     finalizeSession(updated);
     setSaved(true);
+
+    setUploadStatus('uploading');
+    setUploadMessage('Uploading session record to study server...');
+
+    try {
+      const response = await uploadSessionRecord(updated);
+      setUploadStatus('success');
+      setUploadMessage(`Upload complete. Record ${response.recordId} stored at ${new Date(response.storedAtIso).toLocaleString()}.`);
+    } catch (err) {
+      console.error('Session upload failed:', err);
+      setUploadStatus('error');
+      if (err instanceof StudyAPIError) {
+        setUploadMessage(`Upload failed (${err.status ?? 'unknown'}). Use backup export buttons below.`);
+      } else {
+        setUploadMessage('Upload failed. Use backup export buttons below.');
+      }
+    }
   };
 
   const exportSessionJson = () => {
@@ -125,6 +168,14 @@ const StudySummary: React.FC = () => {
     });
   };
 
+  const openSetup = () => {
+    navigate('/study/setup', {
+      state: {
+        participantId: record.participantId,
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -136,7 +187,7 @@ const StudySummary: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => navigate('/study/setup')}
+            onClick={openSetup}
             className="text-gray-600 hover:text-gray-800"
           >
             Close
@@ -162,48 +213,112 @@ const StudySummary: React.FC = () => {
           </div>
         </div>
 
+        {record.runtimeDiagnostics?.phaseIntegrityOk === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-amber-900 text-sm">
+            <div className="font-medium">Session integrity warning</div>
+            <div className="mt-1">
+              Phase logging appears incomplete for this run. Please repeat this session and keep this record flagged for audit.
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg border border-gray-200 p-6">
+          {missingCliSamples && (
+            <div className="mb-4 text-sm rounded px-3 py-2 border text-red-700 bg-red-50 border-red-100">
+              No CLI samples were captured for this run. NASA-TLX submission is disabled and this session must be repeated.
+            </div>
+          )}
           <NasaTLXForm
             title="NASA-TLX (Session-level)"
-            submitLabel={saved ? 'NASA-TLX Saved' : 'Save NASA-TLX'}
-            onSubmit={submitTlx}
+            submitLabel={
+              missingCliSamples
+                ? 'Cannot Save: Missing CLI Samples'
+                : saved
+                ? 'NASA-TLX Saved'
+                : 'Save NASA-TLX'
+            }
+            submitDisabled={missingCliSamples || saved}
+            onSubmit={(scores) => {
+              void submitTlx(scores);
+            }}
           />
           {saved && (
             <div className="mt-3 text-sm text-green-700 bg-green-50 border border-green-100 rounded px-3 py-2">
-              Session record finalized and saved locally.
+              Session record finalized locally.
+            </div>
+          )}
+          {uploadStatus !== 'idle' && (
+            <div
+              className={`mt-3 text-sm rounded px-3 py-2 border ${
+                uploadStatus === 'error'
+                  ? 'text-red-700 bg-red-50 border-red-100'
+                  : uploadStatus === 'success'
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
+                  : 'text-blue-700 bg-blue-50 border-blue-100'
+              }`}
+            >
+              {uploadMessage}
             </div>
           )}
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-3">Exports</h2>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={exportSessionJson}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Export Session JSON
-            </button>
-            <button
-              onClick={exportDelayedPacket}
-              className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              Export Delayed Packet
-            </button>
-            <button
-              onClick={exportBundle}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              Export Participant Bundle (JSON + CSV)
-            </button>
-            <button
-              onClick={() => navigate('/study/delayed')}
-              className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              Open Delayed Test Page
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-3">Next Step</h2>
+          {record.sessionNumber === 1 ? (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Session 1 is complete. Continue directly to Session 2.
+              </p>
+              <button
+                onClick={openSetup}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Continue to Session 2
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Both sessions are complete. Proceed to delayed testing.
+              </p>
+              <button
+                onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Start Delayed Test
+              </button>
+            </>
+          )}
         </div>
+
+        {uploadStatus === 'error' && (
+          <div className="bg-white rounded-lg border border-red-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-3">Backup Exports</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Upload failed, so download local backup files and send them to the researcher.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={exportSessionJson}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Export Session JSON
+              </button>
+              <button
+                onClick={exportDelayedPacket}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Export Delayed Packet
+              </button>
+              <button
+                onClick={exportBundle}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Export Participant Bundle (JSON + CSV)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

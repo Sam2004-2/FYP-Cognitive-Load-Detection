@@ -1,12 +1,20 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import CuedRecallTest from '../components/study/CuedRecallTest';
 import RecognitionTest from '../components/study/RecognitionTest';
 import { STUDY_RECORD_VERSION, STUDY_CONFIG } from '../config/studyConfig';
+import { getPendingDelayedTasks, StudyAPIError, uploadDelayedRecord } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
 import { createDelayedRecordId, listPendingDelayedTests, saveDelayedResult } from '../services/studyStorage';
 import { DelayedPacket } from '../services/studyStimuli';
 import { triggerDownload } from '../services/studyExport';
-import { StudyDelayedTestRecord, StudySessionRecord, StudyStimulusItem, StudyTrialResult } from '../types/study';
+import {
+  PendingDelayedTask,
+  StudyDelayedTestRecord,
+  StudySessionRecord,
+  StudyStimulusItem,
+  StudyTrialResult,
+} from '../types/study';
 
 type DelayedPhase =
   | 'select'
@@ -16,8 +24,12 @@ type DelayedPhase =
   | 'test_hard_cued'
   | 'done';
 
+interface DelayedRouteState {
+  participantId?: string;
+}
+
 interface LoadedTarget {
-  source: 'pending' | 'imported';
+  source: 'server' | 'local' | 'imported';
   participantId: string;
   sessionNumber: 1 | 2;
   condition: 'adaptive' | 'baseline';
@@ -28,7 +40,10 @@ interface LoadedTarget {
   hardItems: StudyStimulusItem[];
 }
 
-function itemsFromSession(record: StudySessionRecord): { easyItems: StudyStimulusItem[]; hardItems: StudyStimulusItem[] } {
+function itemsFromSession(record: StudySessionRecord): {
+  easyItems: StudyStimulusItem[];
+  hardItems: StudyStimulusItem[];
+} {
   const learning = record.trials.filter((trial) => trial.kind === 'learning');
   const unique = new Map<string, StudyStimulusItem>();
 
@@ -53,7 +68,21 @@ function itemsFromSession(record: StudySessionRecord): { easyItems: StudyStimulu
 
 const StudyDelayedTest: React.FC = () => {
   const navigate = useNavigate();
-  const pending = useMemo(() => listPendingDelayedTests(), []);
+  const location = useLocation();
+  const routeState = location.state as DelayedRouteState | undefined;
+
+  const [participantLookupId, setParticipantLookupId] = useState(routeState?.participantId ?? '');
+  const [serverPending, setServerPending] = useState<PendingDelayedTask[]>([]);
+  const [serverStatus, setServerStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [serverError, setServerError] = useState('');
+
+  const localPending = useMemo(() => {
+    const participantId = participantLookupId.trim();
+    if (!participantId) {
+      return listPendingDelayedTests();
+    }
+    return listPendingDelayedTests(participantId);
+  }, [participantLookupId]);
 
   const [loaded, setLoaded] = useState<LoadedTarget | null>(null);
   const [phase, setPhase] = useState<DelayedPhase>('select');
@@ -61,10 +90,60 @@ const StudyDelayedTest: React.FC = () => {
   const [completedRecord, setCompletedRecord] = useState<StudyDelayedTestRecord | null>(null);
   const [sessionStartMs] = useState(Date.now());
 
-  const startFromPending = (record: StudySessionRecord) => {
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
+
+  useEffect(() => {
+    trackPageView({
+      page: ACTIVITY_PAGES.STUDY_DELAYED,
+      participantId: routeState?.participantId,
+    });
+  }, [routeState?.participantId]);
+
+  const cancelledRef = useRef(false);
+
+  const refreshServerPending = useCallback(async (participantId: string) => {
+    const trimmed = participantId.trim();
+    if (!trimmed) {
+      setServerPending([]);
+      setServerStatus('idle');
+      setServerError('');
+      return;
+    }
+
+    setServerStatus('loading');
+    setServerError('');
+
+    try {
+      const pending = await getPendingDelayedTasks(trimmed);
+      if (cancelledRef.current) return;
+      setServerPending(pending);
+      setServerStatus('ready');
+    } catch (err) {
+      if (cancelledRef.current) return;
+      console.error('Failed to fetch server pending delayed tests:', err);
+      setServerPending([]);
+      setServerStatus('error');
+      if (err instanceof StudyAPIError) {
+        setServerError(`Failed to load server pending tasks (${err.status ?? 'unknown'}).`);
+      } else {
+        setServerError('Failed to load server pending tasks.');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    void refreshServerPending(participantLookupId);
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [participantLookupId, refreshServerPending]);
+
+  const startFromLocalPending = (record: StudySessionRecord) => {
     const { easyItems, hardItems } = itemsFromSession(record);
     setLoaded({
-      source: 'pending',
+      source: 'local',
       participantId: record.participantId,
       sessionNumber: record.sessionNumber,
       condition: record.condition,
@@ -74,6 +153,29 @@ const StudyDelayedTest: React.FC = () => {
       easyItems,
       hardItems,
     });
+    setTrials([]);
+    setCompletedRecord(null);
+    setUploadStatus('idle');
+    setUploadMessage('');
+    setPhase('test_easy_recognition');
+  };
+
+  const startFromServerPending = (task: PendingDelayedTask) => {
+    setLoaded({
+      source: 'server',
+      participantId: task.participantId,
+      sessionNumber: task.sessionNumber,
+      condition: task.condition,
+      form: task.form,
+      linkedSessionRecordId: task.linkedSessionRecordId,
+      dueAtIso: task.dueAtIso,
+      easyItems: task.easyItems,
+      hardItems: task.hardItems,
+    });
+    setTrials([]);
+    setCompletedRecord(null);
+    setUploadStatus('idle');
+    setUploadMessage('');
     setPhase('test_easy_recognition');
   };
 
@@ -92,6 +194,10 @@ const StudyDelayedTest: React.FC = () => {
       easyItems: packet.easyItems,
       hardItems: packet.hardItems,
     });
+    setTrials([]);
+    setCompletedRecord(null);
+    setUploadStatus('idle');
+    setUploadMessage('');
     setPhase('test_easy_recognition');
   };
 
@@ -99,7 +205,7 @@ const StudyDelayedTest: React.FC = () => {
     setTrials((prev) => [...prev, ...newTrials]);
   };
 
-  const finish = (finalTrials: StudyTrialResult[] = []) => {
+  const finish = async (finalTrials: StudyTrialResult[] = []) => {
     if (!loaded) return;
 
     const merged = [...trials, ...finalTrials];
@@ -131,6 +237,24 @@ const StudyDelayedTest: React.FC = () => {
     saveDelayedResult(record);
     setCompletedRecord(record);
     setPhase('done');
+
+    setUploadStatus('uploading');
+    setUploadMessage('Uploading delayed test record to study server...');
+
+    try {
+      const result = await uploadDelayedRecord(record);
+      setUploadStatus('success');
+      setUploadMessage(`Upload complete. Record ${result.recordId} stored at ${new Date(result.storedAtIso).toLocaleString()}.`);
+      await refreshServerPending(record.participantId);
+    } catch (err) {
+      console.error('Delayed upload failed:', err);
+      setUploadStatus('error');
+      if (err instanceof StudyAPIError) {
+        setUploadMessage(`Upload failed (${err.status ?? 'unknown'}). Download fallback JSON below.`);
+      } else {
+        setUploadMessage('Upload failed. Download fallback JSON below.');
+      }
+    }
   };
 
   const exportDelayedJson = () => {
@@ -158,16 +282,62 @@ const StudyDelayedTest: React.FC = () => {
 
         {phase === 'select' && (
           <div className="space-y-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+              <h2 className="text-xl font-semibold text-gray-800">Load Pending Tests by Participant ID</h2>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  value={participantLookupId}
+                  onChange={(event) => setParticipantLookupId(event.target.value)}
+                  placeholder="Participant ID"
+                  className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={() => {
+                    void refreshServerPending(participantLookupId);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {serverStatus === 'loading' && (
+                <p className="text-sm text-gray-600">Checking server for delayed tests...</p>
+              )}
+              {serverStatus === 'error' && (
+                <p className="text-sm text-red-700">{serverError}</p>
+              )}
+              {serverStatus === 'ready' && serverPending.length === 0 && (
+                <p className="text-sm text-gray-600">No server-side delayed tests found for this participant.</p>
+              )}
+              {serverPending.length > 0 && (
+                <div className="space-y-3">
+                  {serverPending.map((task) => (
+                    <button
+                      key={`${task.linkedSessionRecordId}-${task.sessionNumber}`}
+                      onClick={() => startFromServerPending(task)}
+                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-blue-400 bg-white"
+                    >
+                      <div className="font-medium text-gray-800">
+                        {task.participantId} • Session {task.sessionNumber} • {task.condition}
+                      </div>
+                      <div className="text-sm text-gray-500">Due: {new Date(task.dueAtIso).toLocaleString()}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">Pending local delayed tests</h2>
-              {pending.length === 0 ? (
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">Local fallback pending tests</h2>
+              {localPending.length === 0 ? (
                 <p className="text-gray-600">No pending delayed tests found in local storage.</p>
               ) : (
                 <div className="space-y-3">
-                  {pending.map((record) => (
+                  {localPending.map((record) => (
                     <button
                       key={record.recordId}
-                      onClick={() => startFromPending(record)}
+                      onClick={() => startFromLocalPending(record)}
                       className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-blue-400 bg-white"
                     >
                       <div className="font-medium text-gray-800">
@@ -181,7 +351,7 @@ const StudyDelayedTest: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">Import delayed packet</h2>
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">Import delayed packet (fallback)</h2>
               <input
                 type="file"
                 accept="application/json"
@@ -193,7 +363,7 @@ const StudyDelayedTest: React.FC = () => {
                 }}
               />
               <p className="text-sm text-gray-500 mt-2">
-                Use this if delayed test is being run on a different device.
+                Use this only if server lookup is unavailable and the researcher provided a delayed packet JSON.
               </p>
             </div>
           </div>
@@ -259,7 +429,7 @@ const StudyDelayedTest: React.FC = () => {
             form={loaded.form}
             sessionStartMs={sessionStartMs}
             onComplete={(newTrials) => {
-              finish(newTrials);
+              void finish(newTrials);
             }}
           />
         )}
@@ -282,15 +452,31 @@ const StudyDelayedTest: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={exportDelayedJson}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+            {uploadStatus !== 'idle' && (
+              <div
+                className={`text-sm rounded px-3 py-2 border ${
+                  uploadStatus === 'error'
+                    ? 'text-red-700 bg-red-50 border-red-100'
+                    : uploadStatus === 'success'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
+                    : 'text-blue-700 bg-blue-50 border-blue-100'
+                }`}
               >
-                Export Delayed JSON
-              </button>
+                {uploadMessage}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              {uploadStatus === 'error' && (
+                <button
+                  onClick={exportDelayedJson}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Export Delayed JSON (Fallback)
+                </button>
+              )}
               <button
-                onClick={() => navigate('/study/setup')}
+                onClick={() => navigate('/study/setup', { state: { participantId: completedRecord.participantId } })}
                 className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800"
               >
                 Back to Study Setup

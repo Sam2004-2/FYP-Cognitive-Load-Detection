@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { scoreCuedRecallResponse } from '../../services/studyScoring';
 import {
   StudyCondition,
   StudyForm,
@@ -36,8 +37,11 @@ const CuedRecallTest: React.FC<CuedRecallTestProps> = ({
   const submit = () => {
     if (!current) return;
     const now = Date.now();
-    const normalizedResponse = answer.trim().toLowerCase();
-    const normalizedTarget = current.target.trim().toLowerCase();
+    const scored = scoreCuedRecallResponse(
+      answer,
+      current.target,
+      items.map((item) => item.target)
+    );
 
     const trial: StudyTrialResult = {
       trialId: `cued_${current.id}_${now}`,
@@ -51,7 +55,8 @@ const CuedRecallTest: React.FC<CuedRecallTestProps> = ({
       cue: current.cue,
       target: current.target,
       responseText: answer,
-      correct: normalizedResponse === normalizedTarget,
+      scoring: scored.scoring,
+      correct: scored.correct,
       reactionTimeMs: now - questionStartMs,
       condition,
       form,

@@ -25,12 +25,23 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
   
   // Refs persist across re-renders without causing re-renders when updated ***
   const mediaPipeRef = useRef<MediaPipeManager | null>(null);   // MediaPipe instance ***
-  const animationFrameRef = useRef<number | null>(null);        // RAF handle for cleanup ***
+  const rafIdRef = useRef<number | null>(null);                 // RAF handle for cleanup ***
+  const isLoopActiveRef = useRef<boolean>(false);               // Tracks whether the render loop should run ***
+  const isActiveRef = useRef<boolean>(isActive);                // Latest active flag used inside RAF loop ***
+  const onFrameFeaturesRef = useRef<WebcamFeedProps['onFrameFeatures']>(onFrameFeatures); // Latest callback ***
   const streamRef = useRef<MediaStream | null>(null);           // Camera stream for cleanup ***
   const lastFrameTimeRef = useRef<number>(0);                   // Last processed frame time (ms) for throttling ***
   const lastVideoTimeRef = useRef<number>(-1);                  // Last processed video.currentTime (s) ***
   const frameCountRef = useRef<number>(0);                      // Frame counter for FPS ***
   const fpsUpdateIntervalRef = useRef<number>(0);               // Last FPS update time ***
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  useEffect(() => {
+    onFrameFeaturesRef.current = onFrameFeatures;
+  }, [onFrameFeatures]);
 
   // Initialize MediaPipe
   useEffect(() => {
@@ -56,10 +67,23 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     };
   }, []);
 
+  const stopProcessingLoop = useCallback(() => {
+    isLoopActiveRef.current = false;
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  }, []);
+
   // useCallback memoises the function to prevent recreation on every render ***
   // Empty deps array means function is stable - only created once ***
   const processFrame = useCallback(async () => {
-    if (!isActive || !videoRef.current || !canvasRef.current || !mediaPipeRef.current) {
+    if (!isLoopActiveRef.current) {
+      return;
+    }
+
+    if (!isActiveRef.current || !videoRef.current || !canvasRef.current || !mediaPipeRef.current) {
+      stopProcessingLoop();
       return;
     }
 
@@ -68,7 +92,7 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
 
     // Check if video is ready
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+      rafIdRef.current = requestAnimationFrame(processFrame);
       return;
     }
 
@@ -76,11 +100,11 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     const nowMs = performance.now();
     const minIntervalMs = 1000 / FEATURE_CONFIG.video.fps;
     if (nowMs - lastFrameTimeRef.current < minIntervalMs) {
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+      rafIdRef.current = requestAnimationFrame(processFrame);
       return;
     }
     if (video.currentTime === lastVideoTimeRef.current) {
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+      rafIdRef.current = requestAnimationFrame(processFrame);
       return;
     }
     lastFrameTimeRef.current = nowMs;
@@ -111,8 +135,8 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
         const frameFeatures = extractFrameFeatures(imageData, landmarkResult);
 
         // Call callback with features
-        if (onFrameFeatures) {
-          onFrameFeatures(frameFeatures);
+        if (onFrameFeaturesRef.current) {
+          onFrameFeaturesRef.current(frameFeatures);
         }
       }
 
@@ -133,20 +157,25 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     }
 
     // Schedule next frame
-    animationFrameRef.current = requestAnimationFrame(processFrame);
-  }, [isActive, onFrameFeatures]);
+    if (isLoopActiveRef.current) {
+      rafIdRef.current = requestAnimationFrame(processFrame);
+    }
+  }, [stopProcessingLoop]);
+
+  const startProcessingLoop = useCallback(() => {
+    if (isLoopActiveRef.current) return;
+    isLoopActiveRef.current = true;
+    rafIdRef.current = requestAnimationFrame(processFrame);
+  }, [processFrame]);
 
   // Setup webcam with useEffect to only render when active***
   useEffect(() => {
     // complicated to stop the stream and release cam ***
     const stopCurrentStream = () => {
+      stopProcessingLoop();
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
       }
     };
 
@@ -181,7 +210,7 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     return () => {
       stopCurrentStream();
     };
-  }, [isActive]);
+  }, [isActive, stopProcessingLoop]);
 
   // Start frame processing when video is ready
   useEffect(() => {
@@ -189,20 +218,25 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
     if (!video) return;
 
     const handleLoadedData = () => {
+      if (!isActiveRef.current) return;
       console.log('Video ready, starting frame processing');
       frameCountRef.current = 0;
       fpsUpdateIntervalRef.current = performance.now();
       lastFrameTimeRef.current = 0;
       lastVideoTimeRef.current = -1;
-      processFrame();
+      startProcessingLoop();
     };
 
     video.addEventListener('loadeddata', handleLoadedData);
+    if (video.readyState >= video.HAVE_ENOUGH_DATA && isActiveRef.current) {
+      handleLoadedData();
+    }
 
     return () => {
       video.removeEventListener('loadeddata', handleLoadedData);
+      stopProcessingLoop();
     };
-  }, [processFrame]);
+  }, [startProcessingLoop, stopProcessingLoop]);
 
   if (error) {
     return (

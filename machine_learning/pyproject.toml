@@ -13,13 +13,13 @@ authors = [
     {name = "CLE Team"},
 ]
 dependencies = [
-    "numpy>=1.24.0,<2.0.0",
+    "numpy>=2.2.0,<2.3.0",
     "pandas>=2.0.0,<3.0.0",
     "opencv-python>=4.8.0,<5.0.0",
     "mediapipe>=0.10.0,<0.11.0",
     "scikit-learn>=1.3.0,<2.0.0",
     "scipy>=1.11.0,<2.0.0",
-    "joblib>=1.3.0,<2.0.0",
+    "joblib>=1.5.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
     "matplotlib>=3.7.0,<4.0.0",
     "tqdm>=4.65.0,<5.0.0",
@@ -31,6 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0,<8.0.0",
+    "httpx>=0.27.0,<1.0.0",
     "black>=23.7.0,<24.0.0",
     "isort>=5.12.0,<6.0.0",
     "mypy>=1.4.0,<2.0.0",
@@ -87,4 +88,3 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
-

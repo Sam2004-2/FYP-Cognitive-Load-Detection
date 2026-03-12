@@ -1,18 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createParticipantIdentity, StudyAPIError } from '../services/studyApiClient';
+import { ACTIVITY_PAGES, trackPageView } from '../services/studyActivityTracker';
+import { StudyParticipantIdentity } from '../types/study';
 
-// Landing page component - handles camera permissions before session starts ***
+interface StudySetupRouteState {
+  participantId: string;
+}
+
 const SessionSetup: React.FC = () => {
-  const navigate = useNavigate();  // React Router hook for programmatic navigation ***
+  const navigate = useNavigate();
+
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [instructionsAccepted, setInstructionsAccepted] = useState(false);
+
+  const [participant, setParticipant] = useState<StudyParticipantIdentity | null>(null);
+  const [participantAcknowledged, setParticipantAcknowledged] = useState(false);
+  const [participantLoading, setParticipantLoading] = useState(false);
+
   const [cameraPermission, setCameraPermission] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
-  // Requests camera access using browser's getUserMedia API ***
-  // Immediately stops stream after permission granted - just testing access ***
+  useEffect(() => {
+    trackPageView({ page: ACTIVITY_PAGES.SESSION_SETUP });
+  }, []);
+
   const requestCameraPermission = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((track) => track.stop());  // Release camera immediately ***
+      stream.getTracks().forEach((track) => track.stop());
       setCameraPermission(true);
       setError('');
     } catch (err) {
@@ -21,60 +37,150 @@ const SessionSetup: React.FC = () => {
     }
   };
 
-  const startSession = () => {
-    navigate('/study/setup');
+  const generateParticipantId = async () => {
+    setParticipantLoading(true);
+    setError('');
+
+    try {
+      const identity = await createParticipantIdentity();
+      setParticipant(identity);
+      setParticipantAcknowledged(false);
+    } catch (err) {
+      console.error('Participant ID generation failed:', err);
+      if (err instanceof StudyAPIError) {
+        setError(`Participant ID generation failed: ${err.message}`);
+      } else {
+        setError('Participant ID generation failed. Please refresh and try again.');
+      }
+    } finally {
+      setParticipantLoading(false);
+    }
   };
+
+  const startSession = () => {
+    if (!participant) return;
+    const state: StudySetupRouteState = {
+      participantId: participant.participantId,
+    };
+    navigate('/study/setup', { state });
+  };
+
+  const canStart =
+    consentAccepted &&
+    instructionsAccepted &&
+    cameraPermission &&
+    Boolean(participant) &&
+    participantAcknowledged;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="bg-white rounded-lg shadow-xl p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">Cognitive Load Monitor</h1>
-            <p className="text-gray-600">Study protocol workflow for your pilot crossover sessions</p>
+      <div className="max-w-3xl w-full">
+        <div className="bg-white rounded-lg shadow-xl p-8 space-y-6">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">Cognitive Load Study</h1>
+            <p className="text-gray-600">Please complete setup before starting your study session.</p>
           </div>
 
-          <div className="space-y-6">
-            {/* Camera Permission */}
-            <div className="border rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-3">Camera Access</h2>
-              <p className="text-gray-600 mb-4">
-                We need access to your camera to monitor facial features. All processing happens locally on your device.
-              </p>
-              {!cameraPermission ? (
-                <button
-                  onClick={requestCameraPermission}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors duration-200"
-                >
-                  Enable Camera
-                </button>
-              ) : (
-                <div className="flex items-center text-green-600">
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  Camera access granted
-                </div>
-              )}
-            </div>
+          <div className="border rounded-lg p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800">Consent and Instructions</h2>
+            <p className="text-gray-700 text-sm">
+              Requirements: laptop/desktop with webcam, stable internet, quiet environment, and latest Chrome/Edge.
+              Keep your face centered with steady lighting. Session duration is approximately 10-15 minutes.
+              You will need your participant ID again for Session 2 and delayed follow-up.
+            </p>
+            <a
+              href="/study-instructions.md"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-blue-700 hover:text-blue-900 underline"
+            >
+              Open full participant instructions
+            </a>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={(event) => setConsentAccepted(event.target.checked)}
+                className="mt-1"
+              />
+              <span>I consent to participate and allow webcam-based data collection for this study.</span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={instructionsAccepted}
+                onChange={(event) => setInstructionsAccepted(event.target.checked)}
+                className="mt-1"
+              />
+              <span>I have read and understood the participant instructions.</span>
+            </label>
+          </div>
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-                {error}
+          <div className="border rounded-lg p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800">Participant ID</h2>
+            <p className="text-sm text-gray-600">
+              Generate your participant ID now and keep it for all follow-up sessions.
+            </p>
+            <button
+              onClick={generateParticipantId}
+              disabled={participantLoading}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg transition-colors duration-200"
+            >
+              {participantLoading ? 'Generating...' : participant ? 'Regenerate Participant ID' : 'Generate Participant ID'}
+            </button>
+
+            {participant && (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 space-y-2">
+                <div className="text-sm text-indigo-900">
+                  <span className="font-semibold">Participant ID:</span>{' '}
+                  <span className="font-mono text-base">{participant.participantId}</span>
+                </div>
+                <div className="text-xs text-indigo-700">
+                  Created at: {new Date(participant.createdAtIso).toLocaleString()}
+                </div>
+                <label className="flex items-start gap-2 text-sm text-indigo-900">
+                  <input
+                    type="checkbox"
+                    checked={participantAcknowledged}
+                    onChange={(event) => setParticipantAcknowledged(event.target.checked)}
+                    className="mt-1"
+                  />
+                  <span>I saved this participant ID and will reuse it for future sessions.</span>
+                </label>
               </div>
             )}
+          </div>
 
-            {/* Start Session Button */}
-            {cameraPermission && (
+          <div className="border rounded-lg p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800">Camera Access</h2>
+            <p className="text-gray-600">
+              Camera access is required for real-time facial feature processing during the study.
+            </p>
+            {!cameraPermission ? (
               <button
-                onClick={startSession}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-200 shadow-lg"
+                onClick={requestCameraPermission}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors duration-200"
               >
-                Start Study Setup
+                Enable Camera
               </button>
+            ) : (
+              <div className="text-green-700 font-medium">Camera access granted.</div>
             )}
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={startSession}
+            disabled={!canStart}
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-300 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-200 shadow-lg"
+          >
+            Start Study Setup
+          </button>
         </div>
       </div>
     </div>

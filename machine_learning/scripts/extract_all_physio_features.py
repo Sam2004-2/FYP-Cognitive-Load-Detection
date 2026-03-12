@@ -7,7 +7,7 @@ respiratory features. Outputs a CSV aligned to video feature windows.
 
 Usage:
     python scripts/extract_all_physio_features.py
-    python scripts/extract_all_physio_features.py --physio-dir ../Physiological --output data/processed/physio_features.csv
+    python scripts/extract_all_physio_features.py --physio-dir ../data/raw/Physiological --output data/processed/physio_features.csv
 """
 
 import argparse
@@ -163,7 +163,7 @@ def main():
     parser.add_argument(
         "--physio-dir",
         type=Path,
-        default=Path(__file__).parent.parent.parent / "Physiological",
+        default=Path(__file__).parent.parent.parent / "data" / "raw" / "Physiological",
         help="Path to the Physiological data directory",
     )
     parser.add_argument(
