@@ -18,9 +18,9 @@ const titleMap: Record<StudyInterventionType, string> = {
 };
 
 const bodyMap: Record<StudyInterventionType, string> = {
-  micro_break_60s: 'Cognitive load has remained high. Take a 60-second micro-break to recover.',
+  micro_break_60s: 'Cognitive load has remained persistently high despite pacing and difficulty adjustments. Take a 60-second micro-break to recover.',
   pacing_change: 'Exposure time has been increased for upcoming items to reduce overload.',
-  difficulty_step_down: 'Interference intensity has been reduced for the remaining hard-block items.',
+  difficulty_step_down: 'Interference intensity has been reduced for the remaining hard-block items to lower task demands.',
   suppressed_trigger: 'A high-load trigger was detected and logged, but no adaptation is applied in baseline condition.',
   low_confidence_pause: 'Signal quality is low. Adaptive actions are temporarily paused until quality recovers.',
 };

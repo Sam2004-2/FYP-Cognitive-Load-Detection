@@ -36,7 +36,7 @@ describe('StudyAdaptiveController', () => {
       }
     }
 
-    expect(eventType).toBe('micro_break_60s');
+    expect(eventType).toBe('pacing_change');
   });
 
   it('logs suppressed trigger events in baseline condition', () => {
@@ -102,7 +102,7 @@ describe('StudyAdaptiveController', () => {
       }
     });
 
-    expect(actionType).toBe('micro_break_60s');
+    expect(actionType).toBe('pacing_change');
   });
 
   it('falls back to absolute decision mode when relative variance is tiny', () => {
