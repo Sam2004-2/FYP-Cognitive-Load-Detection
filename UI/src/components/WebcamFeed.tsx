@@ -253,12 +253,12 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
         autoPlay
         playsInline
         muted
-        className="rounded-lg shadow-md"
+        className="rounded-lg"
         style={{ width: '320px', height: '240px', display: showOverlay ? 'none' : 'block' }}
       />
       <canvas
         ref={canvasRef}
-        className="rounded-lg shadow-md"
+        className="rounded-lg"
         style={{ width: '320px', height: '240px', display: showOverlay ? 'block' : 'none' }}
       />
       
@@ -284,7 +284,7 @@ const WebcamFeed: React.FC<WebcamFeedProps> = ({
 
       {/* Processing indicator */}
       {isProcessing && (
-        <div className="absolute bottom-2 right-2 bg-blue-500 bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+        <div className="absolute bottom-2 right-2 bg-gray-800 bg-opacity-75 text-white text-xs px-2 py-1 rounded">
           Processing...
         </div>
       )}

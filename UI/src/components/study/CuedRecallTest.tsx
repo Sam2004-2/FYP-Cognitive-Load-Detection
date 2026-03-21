@@ -89,11 +89,11 @@ const CuedRecallTest: React.FC<CuedRecallTestProps> = ({
         </span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+        <div className="h-full bg-gray-900 transition-all" style={{ width: `${progress}%` }} />
       </div>
 
-      <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-6 text-center">
-        <div className="text-xs uppercase tracking-wide text-emerald-700 font-semibold mb-2">
+      <div className="rounded-lg bg-gray-50 border border-gray-200 p-6 text-center">
+        <div className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">
           Type the target paired with this cue
         </div>
         <div className="text-3xl font-semibold text-gray-800">{current.cue}</div>
@@ -103,7 +103,7 @@ const CuedRecallTest: React.FC<CuedRecallTestProps> = ({
         <input
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-emerald-500"
+          className="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:border-gray-400"
           placeholder="Enter paired target"
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -114,7 +114,7 @@ const CuedRecallTest: React.FC<CuedRecallTestProps> = ({
         <div className="flex justify-end">
           <button
             onClick={submit}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg"
+            className="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-lg"
           >
             {index >= items.length - 1 ? 'Finish Cued Recall' : 'Next'}
           </button>

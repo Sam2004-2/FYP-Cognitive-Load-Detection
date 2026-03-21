@@ -99,13 +99,13 @@ const PairedAssociateLearningBlock: React.FC<PairedAssociateLearningBlockProps> 
       </div>
 
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full bg-blue-500 transition-all" style={{ width: `${progressPct}%` }} />
+        <div className="h-full bg-gray-900 transition-all" style={{ width: `${progressPct}%` }} />
       </div>
 
-      <div className="rounded-xl bg-blue-50 border border-blue-100 p-8 text-center space-y-3">
-        <div className="text-xs uppercase tracking-wide text-blue-600 font-semibold">Memorize this pair</div>
-        <div className="text-4xl font-semibold text-gray-800">{current.cue}</div>
-        <div className="text-2xl text-blue-700">{current.target}</div>
+      <div className="rounded-lg bg-gray-50 border border-gray-200 p-8 text-center space-y-3">
+        <div className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Memorize this pair</div>
+        <div className="text-3xl font-semibold text-gray-900">{current.cue}</div>
+        <div className="text-xl text-gray-700">{current.target}</div>
       </div>
 
       <div className="text-center text-sm text-gray-500">

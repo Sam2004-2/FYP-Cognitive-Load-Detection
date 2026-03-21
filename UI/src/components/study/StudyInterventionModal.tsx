@@ -38,7 +38,7 @@ const StudyInterventionModal: React.FC<StudyInterventionModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-lg p-6 space-y-4">
         <h3 className="text-xl font-semibold text-gray-800">{titleMap[type]}</h3>
         <p className="text-gray-700">{bodyMap[type]}</p>
         {details && <p className="text-sm text-gray-500">{details}</p>}
@@ -54,7 +54,7 @@ const StudyInterventionModal: React.FC<StudyInterventionModalProps> = ({
               </button>
               <button
                 onClick={onAccept}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Start 60s Break
               </button>
@@ -62,7 +62,7 @@ const StudyInterventionModal: React.FC<StudyInterventionModalProps> = ({
           ) : (
             <button
               onClick={onAccept}
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
             >
               Acknowledge
             </button>

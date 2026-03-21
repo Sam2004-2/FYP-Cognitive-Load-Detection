@@ -73,11 +73,11 @@ const SessionSetup: React.FC = () => {
     participantAcknowledged;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-3xl w-full">
-        <div className="bg-white rounded-lg shadow-xl p-8 space-y-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-8 space-y-6">
           <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">Cognitive Load Study</h1>
+            <h1 className="text-2xl font-semibold text-gray-900 mb-2">Cognitive Load Study</h1>
             <p className="text-gray-600">Please complete setup before starting your study session.</p>
           </div>
 
@@ -92,7 +92,7 @@ const SessionSetup: React.FC = () => {
               href="/study-instructions.md"
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-blue-700 hover:text-blue-900 underline"
+              className="text-sm text-gray-900 underline hover:text-gray-600"
             >
               Open full participant instructions
             </a>
@@ -124,21 +124,21 @@ const SessionSetup: React.FC = () => {
             <button
               onClick={generateParticipantId}
               disabled={participantLoading}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-5 py-2 rounded-lg transition-colors duration-200"
+              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-5 py-2 rounded-lg"
             >
               {participantLoading ? 'Generating...' : participant ? 'Regenerate Participant ID' : 'Generate Participant ID'}
             </button>
 
             {participant && (
-              <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4 space-y-2">
-                <div className="text-sm text-indigo-900">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+                <div className="text-sm text-gray-900">
                   <span className="font-semibold">Participant ID:</span>{' '}
                   <span className="font-mono text-base">{participant.participantId}</span>
                 </div>
-                <div className="text-xs text-indigo-700">
+                <div className="text-xs text-gray-500">
                   Created at: {new Date(participant.createdAtIso).toLocaleString()}
                 </div>
-                <label className="flex items-start gap-2 text-sm text-indigo-900">
+                <label className="flex items-start gap-2 text-sm text-gray-900">
                   <input
                     type="checkbox"
                     checked={participantAcknowledged}
@@ -159,7 +159,7 @@ const SessionSetup: React.FC = () => {
             {!cameraPermission ? (
               <button
                 onClick={requestCameraPermission}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors duration-200"
+                className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2 rounded-lg"
               >
                 Enable Camera
               </button>
@@ -177,7 +177,7 @@ const SessionSetup: React.FC = () => {
           <button
             onClick={startSession}
             disabled={!canStart}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-300 text-white px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-200 shadow-lg"
+            className="w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white px-8 py-3 rounded-lg text-lg font-semibold"
           >
             Start Study Setup
           </button>

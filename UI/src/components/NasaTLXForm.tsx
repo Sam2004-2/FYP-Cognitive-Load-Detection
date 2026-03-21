@@ -50,7 +50,7 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
         <div key={key} className="space-y-2">
           <div className="flex justify-between items-center">
             <label className="font-medium text-gray-700">{label}</label>
-            <span className="text-sm font-semibold text-blue-600">{scores[key as keyof NASATLXScores]}</span>
+            <span className="text-sm font-semibold text-gray-900">{scores[key as keyof NASATLXScores]}</span>
           </div>
           <p className="text-sm text-gray-600">{description}</p>
           <input
@@ -59,7 +59,7 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
             max="100"
             value={scores[key as keyof NASATLXScores]}
             onChange={(e) => handleChange(key as keyof NASATLXScores, parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
           />
           <div className="flex justify-between text-xs text-gray-500">
             <span>Low</span>
@@ -71,7 +71,7 @@ const NasaTLXForm: React.FC<NasaTLXFormProps> = ({
       <button
         type="submit"
         disabled={submitDisabled}
-        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold transition-colors duration-200"
+        className="w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-semibold"
       >
         {submitLabel}
       </button>

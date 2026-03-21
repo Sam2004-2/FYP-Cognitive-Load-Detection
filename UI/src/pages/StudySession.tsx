@@ -669,13 +669,13 @@ const StudySession: React.FC = () => {
 
   if (missingSetup) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-lg w-full text-center space-y-3">
           <h2 className="text-xl font-semibold text-gray-800">Missing study setup</h2>
           <p className="text-gray-600">Start from Study Setup to initialize participant/session assignment.</p>
           <button
             onClick={() => navigate('/study/setup')}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+            className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
           >
             Go to Study Setup
           </button>
@@ -685,7 +685,7 @@ const StudySession: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
@@ -705,10 +705,9 @@ const StudySession: React.FC = () => {
         <div className="lg:col-span-2 space-y-4">
           {phase === 'baseline' && (
             <div className="bg-white rounded-lg border border-gray-200 p-8 text-center space-y-3">
-              <div className="text-5xl">🧘</div>
-              <h2 className="text-2xl font-semibold text-gray-800">Baseline Calibration</h2>
+              <h2 className="text-2xl font-semibold text-gray-900">Baseline Calibration</h2>
               <p className="text-gray-600">Look at the screen naturally while baseline normalization is collected.</p>
-              <p className="text-lg text-blue-700 font-medium">
+              <p className="text-lg text-gray-900 font-medium">
                 {Math.max(0, plan.baselineSeconds - phaseSeconds)}s remaining
               </p>
             </div>
@@ -801,11 +800,10 @@ const StudySession: React.FC = () => {
           )}
 
           {phase === 'break' && (
-            <div className="bg-white rounded-lg border border-yellow-200 p-8 text-center space-y-3">
-              <div className="text-5xl">☕</div>
-              <h2 className="text-2xl font-semibold text-gray-800">Micro-break</h2>
+            <div className="bg-white rounded-lg border border-amber-200 p-8 text-center space-y-3">
+              <h2 className="text-2xl font-semibold text-gray-900">Micro-break</h2>
               <p className="text-gray-600">Adaptive break in progress. Resume occurs automatically.</p>
-              <p className="text-lg text-yellow-700 font-medium">
+              <p className="text-lg text-amber-800 font-medium">
                 {Math.max(0, plan.microBreakSeconds - phaseSeconds)}s remaining
               </p>
             </div>
@@ -819,13 +817,13 @@ const StudySession: React.FC = () => {
               </p>
               <button
                 onClick={finishSession}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg"
               >
                 Continue to Study Summary
               </button>
               <button
                 onClick={() => setNasaPreviewOpen((prev) => !prev)}
-                className="ml-3 text-sm text-blue-700 hover:text-blue-900 underline"
+                className="ml-3 text-sm text-gray-900 underline hover:text-gray-600"
               >
                 {nasaPreviewOpen ? 'Hide' : 'Preview'} NASA-TLX form
               </button>

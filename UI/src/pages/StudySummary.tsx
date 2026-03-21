@@ -83,13 +83,13 @@ const StudySummary: React.FC = () => {
 
   if (!record || !summary) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
         <div className="bg-white rounded-lg border border-gray-200 p-6 max-w-lg w-full text-center space-y-3">
           <h2 className="text-xl font-semibold text-gray-800">No study record found</h2>
           <p className="text-gray-600">Complete a study session first.</p>
           <button
             onClick={() => navigate('/study/setup')}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+            className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
           >
             Go to Study Setup
           </button>
@@ -177,11 +177,11 @@ const StudySummary: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Study Session Summary</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Study Session Summary</h1>
             <p className="text-gray-600 mt-1">
               Participant {record.participantId} • Session {record.sessionNumber} • {record.condition}
             </p>
@@ -253,8 +253,8 @@ const StudySummary: React.FC = () => {
                 uploadStatus === 'error'
                   ? 'text-red-700 bg-red-50 border-red-100'
                   : uploadStatus === 'success'
-                  ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
-                  : 'text-blue-700 bg-blue-50 border-blue-100'
+                  ? 'text-green-700 bg-green-50 border-green-200'
+                  : 'text-gray-700 bg-gray-50 border-gray-200'
               }`}
             >
               {uploadMessage}
@@ -271,7 +271,7 @@ const StudySummary: React.FC = () => {
               </p>
               <button
                 onClick={openSetup}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Continue to Session 2
               </button>
@@ -283,7 +283,7 @@ const StudySummary: React.FC = () => {
               </p>
               <button
                 onClick={() => navigate('/study/delayed', { state: { participantId: record.participantId } })}
-                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Start Delayed Test
               </button>
@@ -300,19 +300,19 @@ const StudySummary: React.FC = () => {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={exportSessionJson}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Export Session JSON
               </button>
               <button
                 onClick={exportDelayedPacket}
-                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Export Delayed Packet
               </button>
               <button
                 onClick={exportBundle}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Export Participant Bundle (JSON + CSV)
               </button>

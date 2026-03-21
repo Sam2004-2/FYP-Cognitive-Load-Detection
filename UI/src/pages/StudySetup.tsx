@@ -128,11 +128,11 @@ const StudySetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Study Protocol Setup</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Study Protocol Setup</h1>
             <p className="text-gray-600 mt-1">Configure crossover session assignment and launch run.</p>
           </div>
           <button onClick={() => navigate('/')} className="text-gray-600 hover:text-gray-800">
@@ -147,7 +147,7 @@ const StudySetup: React.FC = () => {
               value={participantId}
               onChange={(e) => setParticipantId(e.target.value)}
               placeholder="e.g., P-260222-A1B2C3"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-gray-400"
             />
             <p className="text-xs text-gray-500 mt-1">
               Use the participant ID generated on the landing page for both sessions and delayed tests.
@@ -167,7 +167,7 @@ const StudySetup: React.FC = () => {
           )}
 
           {assignment && (
-            <div className="rounded-lg bg-blue-50 border border-blue-100 p-4 text-sm text-blue-900 space-y-1">
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 space-y-1">
               <div><span className="font-semibold">Session:</span> {assignment.sessionNumber}</div>
               <div><span className="font-semibold">Condition:</span> {assignment.condition}</div>
               <div><span className="font-semibold">Stimulus form:</span> {assignment.form}</div>
@@ -195,7 +195,7 @@ const StudySetup: React.FC = () => {
           )}
 
           {participantId.trim() && sessionsComplete && (
-            <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 text-sm text-purple-900 space-y-2">
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 space-y-2">
               <div className="font-medium">Delayed testing</div>
               <div>Both sessions are complete. Continue to delayed testing.</div>
               {serverPendingStatus === 'loading' && <div>Checking server for pending delayed tests...</div>}
@@ -214,14 +214,14 @@ const StudySetup: React.FC = () => {
               )}
 
               {localPendingDelayed.length > 0 && (
-                <div className="text-xs text-purple-800">
+                <div className="text-xs text-gray-500">
                   Local device also has {localPendingDelayed.length} pending delayed item(s).
                 </div>
               )}
 
               <button
                 onClick={() => navigate('/study/delayed', { state: { participantId: participantId.trim() } })}
-                className="mt-1 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white"
+                className="mt-1 px-3 py-1.5 rounded bg-gray-900 hover:bg-gray-800 text-white"
               >
                 Start Delayed Test
               </button>
@@ -239,7 +239,7 @@ const StudySetup: React.FC = () => {
               <button
                 onClick={handleStart}
                 disabled={!canStart}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white"
+                className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white"
               >
                 Start Session {nextSessionNumber ?? ''}
               </button>

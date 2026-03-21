@@ -268,11 +268,11 @@ const StudyDelayedTest: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Delayed Test</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Delayed Test</h1>
             <p className="text-gray-600 mt-1">Session-linked delayed recognition and cued recall.</p>
           </div>
           <button onClick={() => navigate('/study/setup')} className="text-gray-600 hover:text-gray-800">
@@ -289,13 +289,13 @@ const StudyDelayedTest: React.FC = () => {
                   value={participantLookupId}
                   onChange={(event) => setParticipantLookupId(event.target.value)}
                   placeholder="Participant ID"
-                  className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
+                  className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:border-gray-400"
                 />
                 <button
                   onClick={() => {
                     void refreshServerPending(participantLookupId);
                   }}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                  className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
                 >
                   Refresh
                 </button>
@@ -316,7 +316,7 @@ const StudyDelayedTest: React.FC = () => {
                     <button
                       key={`${task.linkedSessionRecordId}-${task.sessionNumber}`}
                       onClick={() => startFromServerPending(task)}
-                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-blue-400 bg-white"
+                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-gray-400 bg-white"
                     >
                       <div className="font-medium text-gray-800">
                         {task.participantId} • Session {task.sessionNumber} • {task.condition}
@@ -338,7 +338,7 @@ const StudyDelayedTest: React.FC = () => {
                     <button
                       key={record.recordId}
                       onClick={() => startFromLocalPending(record)}
-                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-blue-400 bg-white"
+                      className="w-full text-left px-4 py-3 rounded-lg border border-gray-300 hover:border-gray-400 bg-white"
                     >
                       <div className="font-medium text-gray-800">
                         {record.participantId} • Session {record.sessionNumber} • {record.condition}
@@ -458,8 +458,8 @@ const StudyDelayedTest: React.FC = () => {
                   uploadStatus === 'error'
                     ? 'text-red-700 bg-red-50 border-red-100'
                     : uploadStatus === 'success'
-                    ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
-                    : 'text-blue-700 bg-blue-50 border-blue-100'
+                    ? 'text-green-700 bg-green-50 border-green-200'
+                    : 'text-gray-700 bg-gray-50 border-gray-200'
                 }`}
               >
                 {uploadMessage}
@@ -470,7 +470,7 @@ const StudyDelayedTest: React.FC = () => {
               {uploadStatus === 'error' && (
                 <button
                   onClick={exportDelayedJson}
-                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                  className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
                 >
                   Export Delayed JSON (Fallback)
                 </button>
