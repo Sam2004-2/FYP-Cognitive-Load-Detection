@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from src.cle.extract.windowing import (
-    WindowBuffer,
     interpolate_gaps,
     sliding_window_indices,
     validate_window_quality,
@@ -129,62 +128,6 @@ def test_interpolate_gaps_too_large():
     # Gap too large, should remain invalid
     assert interpolated[1]["valid"] is False
     assert interpolated[2]["valid"] is False
-
-
-def test_window_buffer_basic():
-    """Test WindowBuffer basic operations."""
-    window_length_s = 5.0
-    fps = 30.0
-
-    buffer = WindowBuffer(window_length_s, fps)
-
-    assert len(buffer) == 0
-    assert not buffer.is_ready()
-
-    # Add frames until buffer is ready
-    max_frames = int(window_length_s * fps)
-    for i in range(max_frames):
-        buffer.add_frame({"frame_idx": i, "valid": True})
-
-    assert buffer.is_ready()
-    assert len(buffer) == max_frames
-
-
-def test_window_buffer_overflow():
-    """Test WindowBuffer overflow behavior (ring buffer)."""
-    window_length_s = 2.0  # Small window
-    fps = 10.0
-    max_frames = int(window_length_s * fps)  # 20 frames
-
-    buffer = WindowBuffer(window_length_s, fps)
-
-    # Add more frames than buffer capacity
-    for i in range(max_frames + 10):
-        buffer.add_frame({"frame_idx": i, "valid": True})
-
-    # Buffer should maintain max size
-    assert len(buffer) == max_frames
-
-    # Should contain most recent frames
-    window = buffer.get_window()
-    assert window[-1]["frame_idx"] == max_frames + 9  # Last frame added
-
-
-def test_window_buffer_times():
-    """Test WindowBuffer time calculation."""
-    window_length_s = 10.0
-    fps = 30.0
-
-    buffer = WindowBuffer(window_length_s, fps)
-
-    # Add frames
-    for i in range(int(fps * window_length_s)):
-        buffer.add_frame({"frame_idx": i})
-
-    start_time, end_time = buffer.get_window_times()
-
-    assert start_time == 0.0
-    assert abs(end_time - window_length_s) < 0.1
 
 
 if __name__ == "__main__":

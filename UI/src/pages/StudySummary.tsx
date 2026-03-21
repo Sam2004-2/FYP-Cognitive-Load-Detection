@@ -78,6 +78,8 @@ const StudySummary: React.FC = () => {
       recognitionAccuracy,
       cuedAccuracy,
       interventionCount: record.interventions.filter((e) => e.outcome === 'applied').length,
+      arithmeticAccuracy: record.arithmeticChallenge?.overallAccuracy ?? null,
+      arithmeticMeanRtMs: record.arithmeticChallenge?.overallMeanRtMs ?? null,
     };
   }, [record]);
 
@@ -194,7 +196,7 @@ const StudySummary: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="text-sm text-gray-500">Recognition accuracy</div>
             <div className="text-2xl font-semibold text-gray-800">{(summary.recognitionAccuracy * 100).toFixed(1)}%</div>
@@ -210,6 +212,17 @@ const StudySummary: React.FC = () => {
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="text-sm text-gray-500">CLI windows</div>
             <div className="text-2xl font-semibold text-gray-800">{record.cliSamples.length}</div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="text-sm text-gray-500">Arithmetic accuracy</div>
+            <div className="text-2xl font-semibold text-gray-800">
+              {summary.arithmeticAccuracy === null ? 'n/a' : `${(summary.arithmeticAccuracy * 100).toFixed(1)}%`}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {summary.arithmeticMeanRtMs === null
+                ? 'No arithmetic block recorded'
+                : `Mean RT ${summary.arithmeticMeanRtMs.toFixed(0)} ms`}
+            </div>
           </div>
         </div>
 

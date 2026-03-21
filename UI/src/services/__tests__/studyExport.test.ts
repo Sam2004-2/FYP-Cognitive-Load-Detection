@@ -4,19 +4,50 @@ import { StudySessionRecord, StudyDelayedTestRecord } from '../../types/study';
 function makeSession(overrides: Partial<StudySessionRecord> = {}): StudySessionRecord {
   return {
     recordId: 'rec_1',
-    recordVersion: 1,
+    recordVersion: 3,
     participantId: 'P001',
-    participantIdNormalized: 'p001',
     sessionNumber: 1,
-    condition: 'adaptive',
-    form: 'A',
-    hashValue: 12345,
-    hashParity: 'odd',
-    conditionOrder: ['baseline', 'adaptive'],
-    formOrder: ['B', 'A'],
+    assignment: {
+      participantId: 'P001',
+      participantIdNormalized: 'p001',
+      hashValue: 12345,
+      hashParity: 'odd',
+      conditionOrder: ['baseline', 'adaptive'],
+      formOrder: ['B', 'A'],
+      sessionNumber: 1,
+      condition: 'adaptive',
+      form: 'A',
+      delayedDueAtIso: '2026-02-17T10:00:00Z',
+    },
+    plan: {
+      baselineSeconds: 45,
+      easyItemCount: 8,
+      easyExposureSeconds: 4.5,
+      hardItemCount: 10,
+      hardExposureSeconds: 3.0,
+      hardInterferenceEnabled: true,
+      recognitionChoices: 4,
+      microBreakSeconds: 45,
+      maxMicroBreaksPerSession: 1,
+      adaptationCooldownSeconds: 120,
+      decisionWindowSeconds: 5,
+      smoothingWindows: 3,
+      adaptiveMode: 'relative',
+      absoluteThreshold: 0.45,
+      relativeZThreshold: 1.0,
+      warmupWindows: 4,
+      minStdEpsilon: 0.02,
+      overloadThreshold: 0.7,
+      arithmeticPracticeCount: 1,
+      arithmeticItemsPerDifficulty: 4,
+      arithmeticTimeLimitSeconds: 8,
+      arithmeticTransitionSeconds: 3,
+    },
     startedAtIso: '2026-02-10T10:00:00Z',
     completedAtIso: '2026-02-10T10:30:00Z',
     session2StartedEarlyOverride: false,
+    condition: 'adaptive',
+    form: 'A',
     totalSessionSeconds: 1800,
     activeTaskSeconds: 1500,
     breakSeconds: 300,
@@ -64,6 +95,14 @@ function makeSession(overrides: Partial<StudySessionRecord> = {}): StudySessionR
         target: 'MOON',
         recognitionChoices: ['MOON', 'SUN', 'STAR', 'RAIN'],
         selectedChoice: 'MOON',
+        scoring: {
+          version: 2,
+          method: 'exact_normalized',
+          matchType: 'exact',
+          normalizedResponse: 'moon',
+          normalizedTarget: 'moon',
+          distance: 0,
+        },
         correct: true,
         reactionTimeMs: 1500,
         timestampMs: 5000,
@@ -82,6 +121,67 @@ function makeSession(overrides: Partial<StudySessionRecord> = {}): StudySessionR
         validFrameRatio: 0.98,
       },
     ],
+    arithmeticChallenge: {
+      trials: [
+        {
+          trialId: 'a1',
+          problemId: 'arith-e-01',
+          timestampMs: 7000,
+          sessionTimeS: 7,
+          phase: 'arithmetic_easy',
+          difficulty: 'easy',
+          leftOperand: 2,
+          rightOperand: 3,
+          expression: '2 + 3',
+          expectedAnswer: 5,
+          responseText: '5',
+          responseValue: 5,
+          correct: true,
+          timedOut: false,
+          practice: false,
+          reactionTimeMs: 1200,
+          condition: 'adaptive',
+          form: 'A',
+        },
+      ],
+      summaries: [
+        {
+          difficulty: 'easy',
+          phase: 'arithmetic_easy',
+          practiceCount: 1,
+          scoredCount: 1,
+          correctCount: 1,
+          timeoutCount: 0,
+          accuracy: 1,
+          meanRtMs: 1200,
+        },
+        {
+          difficulty: 'medium',
+          phase: 'arithmetic_medium',
+          practiceCount: 0,
+          scoredCount: 0,
+          correctCount: 0,
+          timeoutCount: 0,
+          accuracy: 0,
+          meanRtMs: 0,
+        },
+        {
+          difficulty: 'hard',
+          phase: 'arithmetic_hard',
+          practiceCount: 0,
+          scoredCount: 0,
+          correctCount: 0,
+          timeoutCount: 0,
+          accuracy: 0,
+          meanRtMs: 0,
+        },
+      ],
+      totalScoredCount: 1,
+      totalCorrectCount: 1,
+      totalTimeoutCount: 0,
+      overallAccuracy: 1,
+      overallMeanRtMs: 1200,
+    },
     nasaTlx: {
       mentalDemand: 75,
       physicalDemand: 20,
@@ -97,10 +197,9 @@ function makeSession(overrides: Partial<StudySessionRecord> = {}): StudySessionR
 function makeDelayed(overrides: Partial<StudyDelayedTestRecord> = {}): StudyDelayedTestRecord {
   return {
     recordId: 'del_1',
-    recordVersion: 1,
+    recordVersion: 3,
     linkedSessionRecordId: 'rec_1',
     participantId: 'P001',
-    participantIdNormalized: 'p001',
     sessionNumber: 1,
     condition: 'adaptive',
     form: 'A',
@@ -118,6 +217,14 @@ function makeDelayed(overrides: Partial<StudyDelayedTestRecord> = {}): StudyDela
         target: 'MOON',
         recognitionChoices: ['MOON', 'SUN'],
         selectedChoice: 'MOON',
+        scoring: {
+          version: 2,
+          method: 'exact_normalized',
+          matchType: 'exact',
+          normalizedResponse: 'moon',
+          normalizedTarget: 'moon',
+          distance: 0,
+        },
         correct: true,
         reactionTimeMs: 2000,
         timestampMs: 1000,
@@ -153,6 +260,10 @@ describe('buildStudyExportTables', () => {
     expect(tables.feature_windows).toContain('blink_rate');
     expect(tables.feature_windows).toContain('is_calibration');
     expect(tables.trials).toContain('cue');
+    expect(tables.arithmetic).toContain('expression');
+    expect(tables.arithmetic).toContain('arith-e-01');
+    expect(tables.trials).toContain('scoring_method');
+    expect(tables.trials).toContain('exact_normalized');
     expect(tables.interventions).toContain('micro_break_60s');
     expect(tables.tlx).toContain('mental_demand');
     expect(tables.delayed).toContain('del_1');
@@ -164,6 +275,7 @@ describe('buildStudyExportTables', () => {
     expect(tables.cli_windows).toBe('');
     expect(tables.feature_windows).toBe('');
     expect(tables.trials).toBe('');
+    expect(tables.arithmetic).toBe('');
     expect(tables.interventions).toBe('');
     expect(tables.tlx).toBe('');
     expect(tables.delayed).toBe('');
@@ -198,6 +310,7 @@ describe('buildStudyExportTables', () => {
     const tables = buildStudyExportTables([session], []);
     // The CSV should include intervention_count=1 (only 'applied')
     expect(tables.session_summary).toContain('intervention_count');
+    expect(tables.session_summary).toContain('arithmetic_accuracy');
     // The interventions CSV should have both entries
     const interventionLines = tables.interventions.split('\n');
     expect(interventionLines.length).toBe(3); // header + 2 rows
@@ -234,5 +347,45 @@ describe('buildStudyExportTables', () => {
     const tables = buildStudyExportTables([session], []);
     // TLX table should be empty (no sessions with nasaTlx)
     expect(tables.tlx).toBe('');
+  });
+
+  it('keeps backward compatibility when arithmetic is absent', () => {
+    const session = makeSession({ arithmeticChallenge: undefined } as any);
+    const tables = buildStudyExportTables([session], []);
+    expect(tables.session_summary).toContain('arithmetic_accuracy');
+    expect(tables.arithmetic).toBe('');
+  });
+
+  it('keeps export compatibility for version 1 trials without scoring metadata', () => {
+    const legacySession = makeSession({
+      recordVersion: 1,
+      trials: [
+        {
+          trialId: 'legacy_t1',
+          phase: 'test_easy_recognition',
+          kind: 'recognition',
+          difficulty: 'easy',
+          blockIndex: 1,
+          itemId: 'item1',
+          cue: 'CAT',
+          target: 'MOON',
+          recognitionChoices: ['MOON', 'SUN'],
+          selectedChoice: 'MOON',
+          correct: true,
+          reactionTimeMs: 1000,
+          timestampMs: 5000,
+          sessionTimeS: 5,
+          condition: 'adaptive',
+          form: 'A',
+        },
+      ],
+    });
+
+    const tables = buildStudyExportTables([legacySession], []);
+    expect(tables.trials).toContain('scoring_method');
+    expect(tables.trials).toContain('record_version');
+    const lines = tables.trials.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain(',1,');
   });
 });

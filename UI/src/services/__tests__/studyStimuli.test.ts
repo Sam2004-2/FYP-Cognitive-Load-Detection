@@ -3,6 +3,14 @@ import {
   buildRecognitionChoices,
   createDelayedPacket,
 } from '../studyStimuli';
+import formAData from '../../assets/study/paired_associate_form_A.json';
+import formBData from '../../assets/study/paired_associate_form_B.json';
+
+type RawStimulusItem = {
+  id: string;
+  target: string;
+  difficulty: 'easy' | 'hard';
+};
 
 describe('getStimulusItemsForBlock', () => {
   it('returns requested number of items', () => {
@@ -99,5 +107,32 @@ describe('createDelayedPacket', () => {
     // ISO string should be parseable
     const date = new Date(packet.generatedAtIso);
     expect(date.getTime()).not.toBeNaN();
+  });
+});
+
+describe('stimulus integrity', () => {
+  const forms = {
+    A: formAData as RawStimulusItem[],
+    B: formBData as RawStimulusItem[],
+  };
+
+  it.each(Object.entries(forms))('keeps %s counts stable', (_label, form) => {
+    expect(form.filter((item) => item.difficulty === 'easy')).toHaveLength(12);
+    expect(form.filter((item) => item.difficulty === 'hard')).toHaveLength(18);
+  });
+
+  it.each(Object.entries(forms))('keeps %s target strings unique within the form', (_label, form) => {
+    const targets = form.map((item) => item.target.toLowerCase());
+    expect(new Set(targets).size).toBe(targets.length);
+  });
+
+  it('does not reintroduce removed bad tokens', () => {
+    const targets = [...(formAData as RawStimulusItem[]), ...(formBData as RawStimulusItem[])].map((item) =>
+      item.target.toLowerCase()
+    );
+    expect(targets).not.toContain('chisle');
+    expect(targets).not.toContain('murmure');
+    expect(targets).not.toContain('tridant');
+    expect(targets).not.toContain('fablet');
   });
 });

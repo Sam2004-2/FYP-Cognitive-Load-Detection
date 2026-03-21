@@ -36,7 +36,7 @@ describe('StudyAdaptiveController', () => {
       }
     }
 
-    expect(eventType).toBe('micro_break_60s');
+    expect(eventType).toBe('pacing_change');
   });
 
   it('logs suppressed trigger events in baseline condition', () => {
@@ -61,6 +61,7 @@ describe('StudyAdaptiveController', () => {
   it('does not trigger in relative mode for tightly clustered CLI values', () => {
     Object.assign(STUDY_CONFIG, {
       adaptiveMode: 'relative',
+      absoluteThreshold: 0.7,
       relativeZThreshold: 2.0,
       warmupWindows: 4,
       minStdEpsilon: 0.001,
@@ -101,7 +102,7 @@ describe('StudyAdaptiveController', () => {
       }
     });
 
-    expect(actionType).toBe('micro_break_60s');
+    expect(actionType).toBe('pacing_change');
   });
 
   it('falls back to absolute decision mode when relative variance is tiny', () => {

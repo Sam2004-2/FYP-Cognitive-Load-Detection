@@ -201,18 +201,20 @@ export class StudyAdaptiveController {
     let actionType: StudyInterventionType;
     let details = '';
 
-    if (this.microBreakCount < STUDY_CONFIG.maxMicroBreaksPerSession) {
-      this.microBreakCount += 1;
-      actionType = 'micro_break_60s';
-      details = 'Prompting a 60 second micro-break due to sustained overload.';
-    } else if (this.pacingOffsetSeconds < 2) {
+    if (this.pacingOffsetSeconds < 2) {
       this.pacingOffsetSeconds = clamp(this.pacingOffsetSeconds + 1, 0, 2);
       actionType = 'pacing_change';
       details = `Increased item exposure by +${this.pacingOffsetSeconds.toFixed(0)}s cumulative.`;
-    } else {
+    } else if (!this.difficultySteppedDown) {
       this.difficultySteppedDown = true;
       actionType = 'difficulty_step_down';
       details = 'Stepped down hard-block interference profile for remaining items.';
+    } else if (this.microBreakCount < STUDY_CONFIG.maxMicroBreaksPerSession) {
+      this.microBreakCount += 1;
+      actionType = 'micro_break_60s';
+      details = 'Prompting a 60 second micro-break due to sustained overload.';
+    } else {
+      return { state: this.getState(), metrics };
     }
 
     this.lastInterventionMs = finalized.timestampMs;

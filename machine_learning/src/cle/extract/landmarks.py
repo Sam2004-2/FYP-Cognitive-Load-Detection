@@ -1,7 +1,7 @@
 """
 Landmark extraction using MediaPipe Face Mesh.
 
-Extracts 468 facial landmarks with iris landmarks for eye tracking.
+Extracts 468 facial landmarks for eye tracking.
 """
 
 from typing import Dict, List, Optional, Tuple
@@ -25,22 +25,12 @@ logger = get_logger(__name__)
 LEFT_EYE_INDICES = [33, 160, 158, 133, 153, 144]  # 6 points for left eye these come from google mediapipe documentation
 RIGHT_EYE_INDICES = [362, 385, 387, 263, 373, 380]  # 6 points for right eye these come from google mediapipe documentation
 
-# Iris landmarks (4 points per iris)
-LEFT_IRIS_INDICES = [469, 470, 471, 472]
-RIGHT_IRIS_INDICES = [474, 475, 476, 477]
-
-# Eye corners (inner and outer canthus)
-LEFT_EYE_INNER = 133
-LEFT_EYE_OUTER = 33
-RIGHT_EYE_INNER = 362
-RIGHT_EYE_OUTER = 263
-
 
 class FaceMeshExtractor:
     """
     MediaPipe Face Mesh extractor for ocular feature extraction.
 
-    Extracts facial landmarks with refined iris landmarks for pupil tracking.
+    Extracts facial landmarks for EAR-based feature computation.
     """
 
     def __init__(
@@ -92,8 +82,6 @@ class FaceMeshExtractor:
                 - detected: Whether face was detected
                 - left_eye: Left eye landmark indices and coordinates
                 - right_eye: Right eye landmark indices and coordinates
-                - left_iris: Left iris landmark coordinates
-                - right_iris: Right iris landmark coordinates
         """
         # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -110,8 +98,6 @@ class FaceMeshExtractor:
                 "detected": False,
                 "left_eye": None,
                 "right_eye": None,
-                "left_iris": None,
-                "right_iris": None,
             }
 
         # Get first face landmarks
@@ -124,11 +110,11 @@ class FaceMeshExtractor:
             landmarks.append((lm.x, lm.y, lm.z))
             landmarks_px.append((int(lm.x * w), int(lm.y * h)))
 
-        # Extract specific eye and iris landmarks
+        # Extract specific eye landmarks
         left_eye_coords = [landmarks[i] for i in LEFT_EYE_INDICES]
         right_eye_coords = [landmarks[i] for i in RIGHT_EYE_INDICES]
 
-        result = {
+        return {
             "landmarks": np.array(landmarks),
             "landmarks_px": np.array(landmarks_px),
             "quality": 1.0,  # MediaPipe doesn't provide per-frame confidence
@@ -142,25 +128,6 @@ class FaceMeshExtractor:
                 "coords": np.array(right_eye_coords),
             },
         }
-
-        # Add iris landmarks if available
-        if self.refine_landmarks and len(landmarks) > 468:
-            left_iris_coords = [landmarks[i] for i in LEFT_IRIS_INDICES]
-            right_iris_coords = [landmarks[i] for i in RIGHT_IRIS_INDICES]
-
-            result["left_iris"] = {
-                "indices": LEFT_IRIS_INDICES,
-                "coords": np.array(left_iris_coords),
-            }
-            result["right_iris"] = {
-                "indices": RIGHT_IRIS_INDICES,
-                "coords": np.array(right_iris_coords),
-            }
-        else:
-            result["left_iris"] = None
-            result["right_iris"] = None
-
-        return result
 
     def close(self) -> None:
         """Release MediaPipe resources."""

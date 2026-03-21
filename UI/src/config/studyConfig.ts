@@ -14,11 +14,15 @@ export const STUDY_CONFIG: StudySessionPlan = {
   decisionWindowSeconds: 5,
   smoothingWindows: 3,
   adaptiveMode: 'relative',
-  absoluteThreshold: 0.58,
+  absoluteThreshold: 0.45,
   relativeZThreshold: 1.0,
   warmupWindows: 4,
   minStdEpsilon: 0.02,
   overloadThreshold: 0.7,
+  arithmeticPracticeCount: 1,
+  arithmeticItemsPerDifficulty: 4,
+  arithmeticTimeLimitSeconds: 8,
+  arithmeticTransitionSeconds: 3,
 };
 
 export const STUDY_QUALITY_CONFIG = {
@@ -32,4 +36,4 @@ export const STUDY_STORAGE_KEYS = {
   delayedPrefix: 'cle_study_delayed_',
 };
 
-export const STUDY_RECORD_VERSION = 1;
+export const STUDY_RECORD_VERSION = 3;
