@@ -89,8 +89,10 @@ export const LANDMARK_INDICES = {
  *  CRITICAL: This order must match feature_spec.json in the backend ***
  *  Changing order will cause model to produce incorrect predictions ***
  *
- *  NOTE: brightness and quality metrics are still *computed* for monitoring
- *  but are excluded from the model feature set to avoid confounding.
+ *  NOTE: mean_brightness, std_brightness, mean_quality, valid_frame_ratio
+ *  are intentionally excluded — they are environmental/quality-gating metrics,
+ *  not cognitive load indicators. They are still computed for quality gating
+ *  in WindowFeatures but never sent to the model.
  */
 export const FEATURE_NAMES = [
   'blink_rate',          // Blinks per minute ***

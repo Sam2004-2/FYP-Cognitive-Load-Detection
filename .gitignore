@@ -104,6 +104,7 @@ ui/.env.production.local
 .env.local
 CLAUDE.md
 claude.md
+.claude/
 
 # Ignore Data folder
 data/
