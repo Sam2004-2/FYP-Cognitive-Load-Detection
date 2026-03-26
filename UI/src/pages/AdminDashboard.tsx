@@ -157,11 +157,11 @@ const AdminDashboard: React.FC = () => {
   const pageViewCounts = summary?.activity.pageViewCounts ?? {};
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Admin Monitoring Dashboard</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Admin Monitoring Dashboard</h1>
             <p className="text-sm text-gray-600 mt-1">
               Report uploads, participant progression, and recent site activity.
             </p>
@@ -175,12 +175,12 @@ const AdminDashboard: React.FC = () => {
                 value={tokenInput}
                 onChange={(event) => setTokenInput(event.target.value)}
                 placeholder="Paste CLE_ADMIN_TOKEN"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-gray-400"
               />
             </div>
             <button
               onClick={saveToken}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2"
+              className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-lg px-4 py-2"
             >
               Save Token
             </button>
@@ -190,7 +190,7 @@ const AdminDashboard: React.FC = () => {
             <button
               onClick={() => void loadSummary()}
               disabled={loadingSummary || !adminToken.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
+              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
             >
               {loadingSummary ? 'Refreshing...' : 'Refresh Summary'}
             </button>
@@ -360,14 +360,14 @@ const AdminDashboard: React.FC = () => {
             <button
               onClick={() => void loadIndex()}
               disabled={loadingIndex}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
+              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
             >
               {loadingIndex ? 'Loading Index...' : 'Load Report Index'}
             </button>
             <button
               onClick={() => void runExport()}
               disabled={exporting}
-              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
+              className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white rounded-lg px-4 py-2"
             >
               {exporting ? 'Exporting...' : 'Download Export'}
             </button>
