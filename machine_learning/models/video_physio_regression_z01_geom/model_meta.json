@@ -1,8 +1,8 @@
 {
-  "training_date": "2026-02-05T16:14:02.274442",
+  "training_date": "2026-03-26T19:34:18.782536",
   "model_type": "GradientBoosting",
   "seed": 42,
-  "video_features": "data/processed/stress_features_10s_geom.csv",
+  "video_features": "data/processed/stress_features_10s_v2.csv",
   "physio_labels": "data/processed/physio_stress_labels.csv",
   "target": "z01",
   "target_name": "physio_stress_z01",
@@ -12,6 +12,6 @@
     "Video1"
   ],
   "baseline_n_windows": 4,
-  "merge_mode": "overlap",
+  "merge_mode": "auto",
   "round_dp": 3
 }
