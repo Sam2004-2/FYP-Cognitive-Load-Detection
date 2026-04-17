@@ -1,23 +1,31 @@
-# Realtime CLI Inference and Study UI - Final Year Thesis
+# Cognitive Load Detection Thesis Project
 
-This repository contains the codebase for my Final Year Thesis project. It comprises a real-time machine learning backend for physiological stress regression and a web-based UI for conducting study protocols.
+This repository contains the code used for the final-year project: a Python backend for cognitive-load inference and study data handling, plus a React study UI.
 
-## Repository Structure
+## Repository Layout
 
-- `machine_learning/`: The core Python backend. Contains the data processing pipeline, model training scripts, and the real-time inference CLI server.
-- `UI/`: The React-based frontend application used to conduct user study sessions.
-- `data/`: Contains all raw datasets (videos, physiological signals, labels) and processed features. (Note: Most contents are ignored by `.gitignore` due to size).
-- `Thesis/`: Contains the LaTeX source code and figures for the written thesis document.
+- `machine_learning/` - FastAPI backend, model loading, training scripts, tests
+- `UI/` - React/TypeScript study application
+- `docs/` - lightweight submission-facing documentation
+- `deploy/` - deployment assets such as the Caddy config
+- `scripts/` - deployment and Azure helper scripts
 
-## Getting Started
+Large datasets, participant exports, and thesis-writing material are not part of this repository.
 
-Please refer to the [QUICKSTART.md](./QUICKSTART.md) file for instructions on how to run the application, including:
-1. Starting the backend server
-2. Launching the study UI
-3. Running the canonical model training pipelines
+## Start Here
 
-## Architecture Overview
+- [Quickstart](./QUICKSTART.md)
+- [Documentation Index](./docs/README.md)
+- [API Notes](./docs/API.md)
+- [Configuration Notes](./docs/CONFIGURATION.md)
+- [Study Protocol](./docs/STUDY_PROTOCOL.md)
+- [Reproducibility Notes](./docs/REPRODUCIBILITY.md)
+- [Deployment Runbook](./DEPLOY_AZURE_VM.md)
+- [Report Export Notes](./REPORT_EXPORTS.md)
 
-The system is split into a **Backend** (`machine_learning`) and a **Frontend** (`UI`). 
+## Main Components
 
-The backend runs a fast inference server that receives video streams and outputs physiological stress regression scores using models trained on canonical physiological data. The frontend is a structured protocol runner that interfaces with the backend to collect data systematically.
+- Backend API routes live in `machine_learning/src/cle/server.py`
+- Frontend routes live in `UI/src/App.tsx`
+- Study timings and controller settings live in `UI/src/config/studyConfig.ts`
+- Frontend feature settings live in `UI/src/config/featureConfig.ts`

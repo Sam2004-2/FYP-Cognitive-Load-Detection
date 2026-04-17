@@ -1,66 +1,74 @@
-# Thesis Quickstart (Pruned Scope)
+# Quickstart
 
-This guide covers the only supported thesis workflow:
-1. Realtime CLI inference backend
-2. Study protocol UI flow
-3. Canonical physio-aligned training pipeline
+This is the shortest supported local workflow for the current repository.
 
-## 1) Start Backend
+## Prerequisites
 
-```bash
+- Python `3.10+`
+- Node.js and npm
+
+## 1. Start the Backend
+
+```sh
 cd machine_learning
-python3 -m pip install -e ".[dev]"
-python3 -m src.cle.server --host 0.0.0.0 --port 8000 \
-  --models-dir models/video_physio_regression_z01_geom
+python -m pip install -e ".[dev]"
+python -m src.cle.server --host 0.0.0.0 --port 8000 --models-dir models/video_physio_regression_z01_geom
 ```
 
-Expected health check:
+Health check:
 
-```bash
+```sh
 curl http://localhost:8000/health
 ```
 
-## 2) Start UI (Study Workflow)
+## 2. Start the UI
 
-```bash
+Point the UI at the backend with `REACT_APP_API_URL=http://localhost:8000`.
+
+Create `UI/.env.local` from `UI/.env.example` if needed.
+
+Then run:
+
+```sh
 cd UI
 npm install
 npm start
 ```
 
-Then run:
-1. `http://localhost:3000/`
-2. Click `Start Study Setup`
-3. Complete the flow:
-`/study/setup -> /study/session -> /study/summary -> /study/delayed`
+Open `http://localhost:3000/`.
 
-## 3) Canonical Training Pipeline
+Main routes:
 
-```bash
+- `/`
+- `/study/setup`
+- `/study/session`
+- `/study/summary`
+- `/study/delayed`
+- `/admin`
+
+## 3. Validate the Repo
+
+```sh
+cd machine_learning
+python -m pytest tests -q
+```
+
+```sh
+cd UI
+npm test -- --watchAll=false --passWithNoTests
+npm run build
+```
+
+## 4. Optional Training Workflow
+
+The training scripts depend on external datasets that are not committed to this repo. Adjust paths to match your local data layout.
+
+```sh
 cd machine_learning
 
-# A. Extract physiological features
-python3 scripts/extract_all_physio_features.py \
-  --physio-dir ../data/raw/Physiological \
-  --output data/processed/physio_features.csv
-
-# B. Generate physiological stress labels
-python3 scripts/generate_physio_labels.py
-
-# C. Train the video student model
-python3 scripts/train_video_physio_regression.py \
-  --video-features data/processed/stress_features_10s_geom.csv \
-  --physio-labels data/processed/physio_stress_labels.csv \
-  --out models/video_physio_regression_z01_geom \
-  --report reports/video_physio_regression_z01_geom_eval.json \
-  --merge-mode overlap \
-  --target z01
+python scripts/extract_all_physio_features.py --physio-dir <path-to-physio-dir> --output data/processed/physio_features.csv
+python scripts/generate_physio_labels.py
+python scripts/train_video_physio_regression.py --video-features data/processed/stress_features_10s_geom.csv --physio-labels data/processed/physio_stress_labels.csv --out models/video_physio_regression_z01_geom --report reports/video_physio_regression_z01_geom_eval.json --merge-mode overlap --target z01
 ```
 
-## 4) Validation Commands
-
-```bash
-cd machine_learning && python3 -m pytest tests -q
-cd UI && npm test -- --watchAll=false --passWithNoTests
-cd UI && npm run build
-```
+For API, config, and study notes, see [docs/README.md](./docs/README.md).
